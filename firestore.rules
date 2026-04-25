@@ -1,0 +1,95 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function getRole() {
+      return get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && getRole() == 'admin';
+    }
+
+    function isManager() {
+      return isSignedIn() && getRole() == 'manager';
+    }
+
+    function isOwner(data) {
+      return isSignedIn() && data.ownerId == request.auth.uid;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Validation (Type/Size guards)
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // --- Test Path ---
+    match /test/connection {
+      allow read: if true;
+    }
+
+    // --- Profiles ---
+    match /profiles/{uid} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow create: if isSignedIn() && request.auth.uid == uid && incoming().role in ['admin', 'manager'];
+      allow update: if isSignedIn() && request.auth.uid == uid && (existing().role == 'admin' || incoming().role == existing().role);
+    }
+
+    // --- Config ---
+    match /config/passwords {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // --- Clients ---
+    match /clients/{clientId} {
+      allow get: if isAdmin() || isManager() || isOwner(existing());
+      allow list: if isAdmin() || isManager() || (isSignedIn() && existing().ownerId == request.auth.uid);
+      allow create: if (isAdmin() || isManager() || isSignedIn()) && incoming().ownerId == request.auth.uid;
+      allow update: if isAdmin() || isOwner(existing());
+      allow delete: if isAdmin();
+    }
+
+    // --- Tasks ---
+    match /tasks/{taskId} {
+      allow get: if isAdmin() || isManager() || isOwner(existing());
+      allow list: if isAdmin() || isManager() || (isSignedIn() && existing().ownerId == request.auth.uid);
+      allow create: if (isAdmin() || isManager() || isSignedIn()) && incoming().ownerId == request.auth.uid;
+      allow update: if isAdmin() || isManager() || isOwner(existing());
+      allow delete: if isAdmin();
+    }
+
+    // --- Invoices ---
+    match /invoices/{invoiceId} {
+      allow get: if isAdmin();
+      allow list: if isAdmin();
+      allow create: if isAdmin() && incoming().ownerId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // --- Ledger ---
+    match /ledger/{entryId} {
+      allow get: if isAdmin();
+      allow list: if isAdmin();
+      allow create: if isAdmin() && incoming().ownerId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+  }
+}

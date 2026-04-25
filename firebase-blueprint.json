@@ -1,0 +1,109 @@
+{
+  "entities": {
+    "Client": {
+      "title": "Client",
+      "description": "Represents a client for whom tasks are performed and invoices are generated.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "company": { "type": "string" },
+        "ownerId": { "type": "string", "description": "The UID of the user who owns this client record." },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "ownerId"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "Represents a piece of work associated with a client.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "clientId": { "type": "string", "description": "Foreign key to the Client." },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "amount": { "type": "number", "description": "The billing amount for this specific task." },
+        "currency": { "type": "string", "enum": ["USD", "INR"] },
+        "checklist": { 
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": { "type": "string" },
+              "completed": { "type": "boolean" }
+            }
+          }
+        },
+        "status": { "type": "string", "enum": ["pending", "ongoing", "completed", "invoiced"] },
+        "dueDate": { "type": "string", "format": "date-time" },
+        "reminderDate": { "type": "string", "format": "date-time" },
+        "ownerId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["clientId", "title", "ownerId", "amount", "currency"]
+    },
+    "Invoice": {
+      "title": "Invoice",
+      "description": "Billing document generated for a client.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "clientId": { "type": "string" },
+        "taskIds": { "type": "array", "items": { "type": "string" } },
+        "invoiceNumber": { "type": "string" },
+        "amount": { "type": "number" },
+        "currency": { "type": "string", "enum": ["USD", "INR"] },
+        "status": { "type": "string", "enum": ["draft", "sent", "paid", "overdue"] },
+        "dueDate": { "type": "string", "format": "date-time" },
+        "reminderDate": { "type": "string", "format": "date-time" },
+        "ownerId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["clientId", "amount", "currency", "ownerId"]
+    },
+    "LedgerEntry": {
+      "title": "Ledger Entry",
+      "description": "Financial record for income and expenses.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string", "enum": ["income", "expense"] },
+        "amount": { "type": "number", "description": "The amount in the base currency (INR)." },
+        "originalAmount": { "type": "number" },
+        "originalCurrency": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "invoiceId": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["type", "amount", "ownerId", "date"]
+    },
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Stores user role and password settings.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "manager"] },
+        "password": { "type": "string" },
+        "usdToInrRate": { "type": "number" },
+        "displayName": { "type": "string" }
+      },
+      "required": ["uid", "role", "password"]
+    }
+  },
+  "firestore": {
+    "clients": { "schema": "Client", "description": "Collection of clients." },
+    "tasks": { "schema": "Task", "description": "Collection of tasks." },
+    "invoices": { "schema": "Invoice", "description": "Collection of invoices." },
+    "ledger": { "schema": "LedgerEntry", "description": "Collection of ledger entries." },
+    "profiles": { "schema": "UserProfile", "description": "User specific configurations." }
+  }
+}

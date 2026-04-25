@@ -1,0 +1,156 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+:root {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  /* Theme Variables */
+  --bg-main: #F7F9FC;
+  --bg-secondary: #FFFFFF;
+  --card-bg: #FFFFFF;
+  --border-color: #E5EAF2;
+  --divider-color: #EEF2F7;
+
+  --text-heading: #111827;
+  --text-primary: #374151;
+  --text-secondary: #6B7280;
+  --text-muted: #9CA3AF;
+
+  --primary: #2563EB;
+  --primary-hover: #1D4ED8;
+  --secondary: #10B981;
+
+  --income: #16A34A;
+  --expense: #DC2626;
+  --pending: #F59E0B;
+}
+
+.dark {
+  --bg-main: #0F172A;
+  --bg-secondary: #111827;
+  --card-bg: #1E293B;
+  --border-color: #2D3748;
+  --divider-color: #334155;
+
+  --text-heading: #F9FAFB;
+  --text-primary: #E5E7EB;
+  --text-secondary: #9CA3AF;
+  --text-muted: #6B7280;
+
+  --primary: #3B82F6;
+  --primary-hover: #2563EB;
+  --secondary: #10B981;
+
+  --income: #22C55E;
+  --expense: #EF4444;
+  --pending: #FBBF24;
+}
+
+@theme {
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+}
+
+@layer base {
+  body {
+    @apply font-sans antialiased text-sm transition-colors duration-200;
+    background-color: var(--bg-main);
+    color: var(--text-primary);
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply px-4 py-2 rounded-lg font-bold text-xs uppercase tracking-wider transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none flex items-center gap-2;
+    background-color: var(--primary);
+    color: #fff;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background-color: var(--primary-hover);
+  }
+  
+  .btn-secondary {
+    @apply px-4 py-2 rounded-lg font-bold text-xs uppercase tracking-wider transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none border flex items-center gap-2;
+    background-color: var(--bg-secondary);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+  }
+  .btn-secondary:hover:not(:disabled) {
+    @apply bg-slate-50 dark:bg-slate-800;
+  }
+
+  .card {
+    @apply rounded-xl overflow-hidden shadow-sm transition-all border;
+    background-color: var(--card-bg);
+    border-color: var(--border-color);
+  }
+  .card:hover {
+    @apply shadow-md;
+  }
+
+  .input {
+    @apply w-full px-3 py-2 rounded-lg outline-none transition-all text-sm border bg-white dark:bg-slate-900;
+    border-color: var(--border-color);
+    color: var(--text-primary);
+  }
+  .input:focus {
+    @apply ring-2;
+    ring-color: color-mix(in srgb, var(--primary) 20%, transparent);
+    border-color: var(--primary);
+  }
+
+  .label-caps {
+    @apply text-[10px] font-bold uppercase tracking-widest;
+    color: var(--text-secondary);
+  }
+
+  .badge {
+    @apply px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border;
+  }
+  .badge-paid {
+    @apply border-emerald-500/20;
+    background-color: rgba(34, 197, 94, 0.1);
+    color: var(--income);
+  }
+  .badge-sent {
+    @apply border-blue-500/20;
+    background-color: rgba(37, 99, 235, 0.1);
+    color: var(--primary);
+  }
+  .badge-overdue {
+    @apply border-rose-500/20;
+    background-color: rgba(220, 38, 38, 0.1);
+    color: var(--expense);
+  }
+  .badge-pending {
+    @apply border-amber-500/20;
+    background-color: rgba(245, 158, 11, 0.1);
+    color: var(--pending);
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  header, aside, nav, button:not(.print-only) {
+    display: none !important;
+  }
+
+  .flex-1 {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  .card {
+    box-shadow: none !important;
+    border: 1px solid #eee !important;
+  }
+}

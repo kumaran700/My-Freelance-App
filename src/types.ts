@@ -1,0 +1,79 @@
+export type Currency = 'USD' | 'INR';
+
+export interface Client {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  company?: string;
+  ownerId: string;
+  createdAt: any;
+  updatedAt: any;
+}
+
+export interface TaskChecklistItem {
+  id: string;
+  text: string;
+  price: number;
+  completed: boolean;
+}
+
+export interface Task {
+  id: string;
+  clientId: string;
+  title: string;
+  description: string;
+  amount: number; // Total calculated from checklist
+  currency: Currency;
+  checklist: TaskChecklistItem[];
+  status: 'pending' | 'ongoing' | 'completed' | 'invoiced';
+  isInvoiced?: boolean;
+  dueDate?: any;
+  reminderDate?: any;
+  ownerId: string;
+  createdAt: any;
+  updatedAt: any;
+}
+
+export interface Invoice {
+  id: string;
+  clientId: string;
+  taskIds: string[];
+  invoiceNumber: string;
+  amount: number;
+  currency: Currency;
+  status: 'draft' | 'sent' | 'paid' | 'overdue' | 'archived';
+  dueDate?: any;
+  reminderDate?: any;
+  ownerId: string;
+  createdAt: any;
+  updatedAt: any;
+}
+
+export interface LedgerEntry {
+  id: string;
+  type: 'income' | 'expense';
+  amount: number; // Base currency (INR)
+  originalAmount: number;
+  originalCurrency: Currency;
+  description: string;
+  category: string;
+  date: any;
+  invoiceId?: string;
+  ownerId: string;
+  createdAt: any;
+}
+
+export interface AppSettings {
+  usdToInrRate: number;
+  theme: 'light' | 'dark';
+  lastRateUpdate?: string;
+}
+
+export interface UserProfile {
+  uid: string;
+  role: 'admin' | 'manager';
+  password?: string;
+  usdToInrRate: number;
+  displayName: string;
+}
