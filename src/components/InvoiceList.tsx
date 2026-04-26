@@ -12,21 +12,23 @@ import {
   AlertCircle,
   Eye,
   Calendar,
-  Download
+  Download,
+  CheckSquare
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { format } from 'date-fns';
-import { db, doc, deleteDoc } from '../lib/firebase';
+import { db, doc, updateDoc, Timestamp, deleteDoc } from '../lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { downloadInvoicePDF } from '../lib/pdfGenerator';
 import { formatCurrency } from '../lib/formatters';
 
 const InvoiceList = () => {
-  const { invoices, clients, tasks, profile, settings, deleteInvoice } = useAppContext();
+  const { invoices, clients, tasks, profile, settings, deleteInvoice, bulkDelete } = useAppContext();
   const isAdmin = profile?.role === 'admin';
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const filteredInvoices = invoices.filter(i => {
     const clientName = clients.find(c => c.id === i.clientId)?.name || '';
@@ -36,29 +38,79 @@ const InvoiceList = () => {
     return matchesSearch && matchesFilter;
   });
 
+  const toggleSelectAll = () => {
+    if (selectedIds.length === filteredInvoices.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredInvoices.map(i => i.id));
+    }
+  };
+
+  const toggleSelect = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  const handleBulkDelete = async () => {
+    await bulkDelete('invoices', selectedIds);
+    setSelectedIds([]);
+  };
+
+  const updateInvoiceStatus = async (invoiceId: string, newStatus: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await updateDoc(doc(db, 'invoices', invoiceId), { status: newStatus, updatedAt: Timestamp.now() });
+      // Note: Ledger sync is handled in InvoiceView or by a listener if implemented
+    } catch (error) {
+      console.error("Update status failed", error);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-2">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-black tracking-tight text-[var(--text-heading)]">INVOICES</h2>
           <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mt-2">Manage your billing and payments.</p>
         </div>
-        <button onClick={() => navigate('/invoices/new')} className="btn-primary">
-          <Plus size={14} />
-          <span>NEW INVOICE</span>
-        </button>
+        <div className="flex items-center gap-3">
+          {isAdmin && selectedIds.length > 0 && (
+            <button 
+              onClick={handleBulkDelete}
+              className="btn h-10 px-4 bg-rose-500/10 text-rose-500 border-rose-500/20 hover:bg-rose-500 hover:text-white transition-all flex items-center gap-2 text-[10px] font-black uppercase tracking-widest"
+            >
+              <Trash2 size={14} />
+              <span>DELETE ({selectedIds.length})</span>
+            </button>
+          )}
+          <button onClick={() => navigate('/invoices/new')} className="btn-primary">
+            <Plus size={14} />
+            <span>NEW INVOICE</span>
+          </button>
+        </div>
       </header>
 
       <div className="flex flex-col md:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" size={14} />
-          <input
-            type="text"
-            placeholder="Search by number or client..."
-            className="input pl-10"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+        <div className="flex items-center gap-3 flex-1">
+          <div 
+            onClick={toggleSelectAll}
+            className="flex items-center gap-2 px-3 h-10 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg cursor-pointer hover:border-[var(--primary)] transition-colors shrink-0"
+          >
+            <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${selectedIds.length === filteredInvoices.length && filteredInvoices.length > 0 ? 'bg-[var(--primary)] border-[var(--primary)]' : 'border-[var(--border-color)]'}`}>
+              {selectedIds.length === filteredInvoices.length && filteredInvoices.length > 0 && <CheckSquare size={10} className="text-white" />}
+            </div>
+            <span className="text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)]">Select All</span>
+          </div>
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" size={14} />
+            <input
+              type="text"
+              placeholder="Search by number or client..."
+              className="input pl-10"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
         </div>
         <div className="flex gap-2">
           <select 
@@ -87,27 +139,52 @@ const InvoiceList = () => {
                 exit={{ opacity: 0, scale: 0.98 }}
                 key={invoice.id}
                 onClick={() => navigate(`/invoices/${invoice.id}`)}
-                className="card group cursor-pointer hover:border-[var(--primary)] border-t-4"
+                className={`card group cursor-pointer hover:border-[var(--primary)] border-t-4 relative border-2 ${selectedIds.includes(invoice.id) ? 'border-[var(--primary)] shadow-xl' : 'border-transparent'}`}
                 style={{ borderTopColor: 
                   invoice.status === 'paid' ? 'var(--income)' : 
                   invoice.status === 'sent' ? 'var(--primary)' : 
                   invoice.status === 'overdue' ? 'var(--expense)' : 'var(--text-muted)' 
                 }}
               >
-                <div className="p-5 space-y-4">
+                {/* Selection Checkbox */}
+                <div 
+                  className="absolute top-3 right-3 z-10 w-5 h-5 rounded border bg-[var(--bg-secondary)] border-[var(--border-color)] flex items-center justify-center cursor-pointer hover:border-[var(--primary)] transition-all"
+                  onClick={(e) => toggleSelect(invoice.id, e)}
+                >
+                  {selectedIds.includes(invoice.id) && <CheckSquare size={12} className="text-[var(--primary)]" />}
+                </div>
+
+                <div className="p-5 space-y-4 pt-10">
                   <div className="flex justify-between items-start">
                     <div className="space-y-0.5">
                       <p className="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest leading-none">{invoice.invoiceNumber}</p>
                       <h3 className="text-sm font-black text-[var(--text-heading)] uppercase tracking-tight line-clamp-1 group-hover:text-[var(--primary)] transition-colors">{client?.name || 'UNKNOWN CLIENT'}</h3>
                     </div>
-                    <div className={`badge ${
-                      invoice.status === 'paid' ? 'badge-paid' :
-                      invoice.status === 'sent' ? 'badge-sent' :
-                      invoice.status === 'overdue' ? 'badge-overdue' :
-                      'bg-[var(--bg-main)] text-[var(--text-muted)]'
-                    }`}>
-                      {invoice.status}
-                    </div>
+                    {isAdmin ? (
+                      <select 
+                        value={invoice.status} 
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => updateInvoiceStatus(invoice.id, e.target.value, e as any)}
+                        className={`text-[9px] font-black uppercase tracking-tight px-2 py-1 rounded-md border appearance-none cursor-pointer ${
+                          invoice.status === 'paid' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
+                          invoice.status === 'sent' ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' :
+                          'bg-[var(--bg-main)] text-[var(--text-muted)] border-[var(--border-color)]'
+                        }`}
+                      >
+                        <option value="draft">DRAFT</option>
+                        <option value="sent">SENT</option>
+                        <option value="paid">PAID</option>
+                        <option value="overdue">OVERDUE</option>
+                      </select>
+                    ) : (
+                      <div className={`badge ${
+                        invoice.status === 'paid' ? 'badge-paid' :
+                        invoice.status === 'sent' ? 'badge-sent' :
+                        'bg-[var(--bg-main)] text-[var(--text-muted)]'
+                      }`}>
+                        {invoice.status}
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-0.5">

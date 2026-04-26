@@ -83,9 +83,9 @@ const Dashboard = () => {
 
   const stats = isAdmin ? [
     { name: 'Monthly Projects', value: filteredTasks.length, icon: CheckSquare, color: 'text-[var(--primary)]', note: `${activeTasks.length} PENDING`, path: '/tasks', bg: 'bg-blue-500/10' },
-    { name: 'Pending Income', value: formatCurrency(invoicedPending, 'INR'), icon: FileText, color: 'text-[var(--pending)]', note: `Unpaid Invoices`, path: '/invoices', bg: 'bg-amber-500/10' },
-    { name: 'Ledger Income', value: formatCurrency(monthlyIncome, 'INR'), icon: Landmark, color: 'text-[var(--income)]', note: 'Selected Month', path: '/ledger', bg: 'bg-emerald-500/10' },
-    { name: 'Total Revenue', value: formatCurrency(totalInvoiced, 'INR'), icon: TrendingUp, color: 'text-[var(--income)]', note: 'All Invoices', path: '/invoices', bg: 'bg-emerald-500/10' },
+    { name: 'Pending Income', value: formatCurrency(invoicedPending, 'INR'), icon: FileText, color: 'text-[var(--pending)]', note: null, path: '/invoices', bg: 'bg-amber-500/10' },
+    { name: 'Ledger Income', value: formatCurrency(monthlyIncome, 'INR'), icon: Landmark, color: 'text-[var(--income)]', note: null, path: '/ledger', bg: 'bg-emerald-500/10' },
+    { name: 'Total Revenue', value: formatCurrency(totalInvoiced, 'INR'), icon: TrendingUp, color: 'text-[var(--income)]', note: null, path: '/invoices', bg: 'bg-emerald-500/10' },
   ] : [
     { name: 'Filtered Tasks', value: filteredTasks.length, icon: CheckSquare, color: 'text-[var(--primary)]', note: `${activeTasks.length} TODO`, path: '/tasks', bg: 'bg-blue-500/10' },
     { name: 'Invoiced', value: filteredTasks.filter(t => t.status === 'invoiced').length, icon: FileText, color: 'text-[var(--primary)]', note: 'Invoiced tasks', path: '/tasks', bg: 'bg-blue-500/10' },
@@ -102,7 +102,7 @@ const Dashboard = () => {
           <div className="flex flex-wrap gap-2">
             <button 
               onClick={toggleTheme}
-              className="p-2 bg-[var(--bg-main)] text-[var(--text-secondary)] rounded-lg hover:text-[var(--primary)] transition-colors border border-[var(--border-color)]"
+              className="p-2 bg-[var(--bg-secondary)] text-[var(--text-secondary)] rounded-lg hover:text-[var(--primary)] transition-colors border border-[var(--border-color)]"
               title="Toggle Theme"
             >
               {settings.theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
@@ -124,14 +124,14 @@ const Dashboard = () => {
 
         <div className="flex items-center gap-3 pt-4 border-t border-[var(--border-color)]">
            <select 
-             className="input h-10 py-1 text-[10px] font-black w-36 bg-[var(--bg-main)]"
+             className="input h-10 py-1 text-[10px] font-black w-36"
              value={viewMonth}
              onChange={(e) => setViewMonth(parseInt(e.target.value))}
            >
              {months.map((m, idx) => <option key={m} value={idx}>{m.toUpperCase()}</option>)}
            </select>
            <select 
-             className="input h-10 py-1 text-[10px] font-black w-28 bg-[var(--bg-main)]"
+             className="input h-10 py-1 text-[10px] font-black w-28"
              value={viewYear}
              onChange={(e) => setViewYear(parseInt(e.target.value))}
            >
@@ -161,9 +161,11 @@ const Dashboard = () => {
             </div>
             <div className="relative mt-6 flex items-baseline justify-between">
               <h3 className="text-2xl font-black tracking-tight text-[var(--text-heading)]">{stat.value}</h3>
-              <span className={`text-[10px] font-bold ${stat.color} bg-[var(--card-bg)] shadow-sm border border-[var(--border-color)] px-3 py-1 rounded-full`}>
-                {stat.note}
-              </span>
+              {stat.note && (
+                <span className={`text-[10px] font-bold ${stat.color} bg-[var(--card-bg)] shadow-sm border border-[var(--border-color)] px-3 py-1 rounded-full`}>
+                  {stat.note}
+                </span>
+              )}
             </div>
           </motion.div>
         ))}
@@ -197,7 +199,7 @@ const Dashboard = () => {
                     <select 
                       value={task.status}
                       onChange={(e) => updateTaskStatus(task.id, e.target.value as any)}
-                      className="input h-8 py-1 text-[10px] font-black w-28 bg-[var(--bg-main)]"
+                      className="input h-8 py-1 text-[10px] font-black w-28"
                     >
                       <option value="pending">Pending</option>
                       <option value="ongoing">Ongoing</option>

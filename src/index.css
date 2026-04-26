@@ -2,7 +2,7 @@
 @import "tailwindcss";
 
 :root {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", "Segoe UI", "Noto Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   
   /* Theme Variables */
@@ -11,6 +11,7 @@
   --card-bg: #FFFFFF;
   --border-color: #E5EAF2;
   --divider-color: #EEF2F7;
+  --border: #E5EAF2;
 
   --text-heading: #111827;
   --text-primary: #374151;
@@ -32,6 +33,7 @@
   --card-bg: #1E293B;
   --border-color: #2D3748;
   --divider-color: #334155;
+  --border: #2D3748;
 
   --text-heading: #F9FAFB;
   --text-primary: #E5E7EB;
@@ -58,6 +60,16 @@
     background-color: var(--bg-main);
     color: var(--text-primary);
   }
+
+  input, textarea, select {
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+  }
+
+  input::placeholder, textarea::placeholder {
+    color: var(--text-muted);
+  }
 }
 
 @layer components {
@@ -77,7 +89,7 @@
     color: var(--text-primary);
   }
   .btn-secondary:hover:not(:disabled) {
-    @apply bg-slate-50 dark:bg-slate-800;
+    @apply opacity-80;
   }
 
   .card {
@@ -90,7 +102,8 @@
   }
 
   .input {
-    @apply w-full px-3 py-2 rounded-lg outline-none transition-all text-sm border bg-white dark:bg-slate-900;
+    @apply w-full px-3 py-2 rounded-lg outline-none transition-all text-sm border;
+    background-color: var(--bg-secondary);
     border-color: var(--border-color);
     color: var(--text-primary);
   }

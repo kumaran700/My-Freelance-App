@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Save, Plus, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useAppContext } from '../context/AppContext';
-import { db, collection, doc, setDoc, updateDoc, Timestamp } from '../lib/firebase';
+import { db, collection, doc, setDoc, updateDoc, deleteDoc, getDocs, query, where, Timestamp } from '../lib/firebase';
 
 import { convertCurrency } from '../lib/formatters';
 
@@ -21,11 +21,14 @@ const InvoiceForm = () => {
     taskIds: [] as string[],
     invoiceNumber: `INV-${Date.now().toString().slice(-6)}`,
     amount: 0,
+    roundOff: 0,
     currency: 'INR' as 'USD' | 'INR',
     status: 'draft' as any,
     dueDate: '',
     reminderDate: '',
   });
+
+  const [oldStatus, setOldStatus] = useState<string>('');
 
   useEffect(() => {
     if (preSelectedTaskId) {
@@ -37,7 +40,7 @@ const InvoiceForm = () => {
             ...prev,
             clientId: task.clientId,
             taskIds: [task.id],
-            amount: taskAmount
+            amount: taskAmount + (task.roundOff || 0)
           };
         });
       }
@@ -48,11 +51,13 @@ const InvoiceForm = () => {
     if (id) {
       const invoice = invoices.find(i => i.id === id);
       if (invoice) {
+        setOldStatus(invoice.status);
         setFormData({
           clientId: invoice.clientId,
           taskIds: invoice.taskIds || [],
           invoiceNumber: invoice.invoiceNumber,
           amount: invoice.amount,
+          roundOff: invoice.roundOff || 0,
           currency: invoice.currency,
           status: invoice.status,
           dueDate: invoice.dueDate ? new Date(invoice.dueDate.toDate ? invoice.dueDate.toDate() : invoice.dueDate).toISOString().split('T')[0] : '',
@@ -77,12 +82,70 @@ const InvoiceForm = () => {
     try {
       if (id) {
         await updateDoc(doc(db, 'invoices', id), invoiceData);
+        
+        // Ledger Sync Logic
+        if (oldStatus !== 'paid' && formData.status === 'paid') {
+          // Create ledger entry
+          const amountInInr = formData.currency === 'USD' ? formData.amount * settings.usdToInrRate : formData.amount;
+          const ledgerRef = doc(collection(db, 'ledger'));
+          await setDoc(ledgerRef, {
+            type: 'income',
+            amount: amountInInr,
+            originalAmount: formData.amount,
+            originalCurrency: formData.currency,
+            description: `Payment for Invoice #${formData.invoiceNumber}`,
+            category: 'Invoice Payment',
+            date: Timestamp.now(),
+            invoiceId: id,
+            ownerId: user.uid,
+            createdAt: Timestamp.now()
+          });
+        } else if (oldStatus === 'paid' && formData.status !== 'paid') {
+          // Delete ledger entry
+          const q = query(collection(db, 'ledger'), where('invoiceId', '==', id));
+          const snapshot = await getDocs(q);
+          snapshot.forEach(async (d) => {
+            await deleteDoc(doc(db, 'ledger', d.id));
+          });
+        } else if (oldStatus === 'paid' && formData.status === 'paid') {
+          // Update ledger entry if needed
+          const q = query(collection(db, 'ledger'), where('invoiceId', '==', id));
+          const snapshot = await getDocs(q);
+          const amountInInr = formData.currency === 'USD' ? formData.amount * settings.usdToInrRate : formData.amount;
+          snapshot.forEach(async (d) => {
+            await updateDoc(doc(db, 'ledger', d.id), {
+              amount: amountInInr,
+              originalAmount: formData.amount,
+              originalCurrency: formData.currency,
+              description: `Payment for Invoice #${formData.invoiceNumber}`,
+              updatedAt: Timestamp.now()
+            });
+          });
+        }
       } else {
         const newDocRef = doc(collection(db, 'invoices'));
         await setDoc(newDocRef, {
           ...invoiceData,
           createdAt: Timestamp.now()
         });
+
+        // Handle auto-paid upon creation
+        if (formData.status === 'paid') {
+           const amountInInr = formData.currency === 'USD' ? formData.amount * settings.usdToInrRate : formData.amount;
+           const ledgerRef = doc(collection(db, 'ledger'));
+           await setDoc(ledgerRef, {
+             type: 'income',
+             amount: amountInInr,
+             originalAmount: formData.amount,
+             originalCurrency: formData.currency,
+             description: `Payment for Invoice #${formData.invoiceNumber}`,
+             category: 'Invoice Payment',
+             date: Timestamp.now(),
+             invoiceId: newDocRef.id,
+             ownerId: user.uid,
+             createdAt: Timestamp.now()
+           });
+        }
 
         // If we created this invoice from tasks, mark those tasks as invoiced
         if (formData.taskIds.length > 0) {
@@ -97,11 +160,12 @@ const InvoiceForm = () => {
     }
   };
 
-  const calculateInvoiceTotal = (taskIds: string[], targetCurrency: string) => {
+  const calculateInvoiceTotal = (taskIds: string[], targetCurrency: string, roundOff: number) => {
     const selectedTasks = tasks.filter(t => taskIds.includes(t.id));
-    return selectedTasks.reduce((sum, t) => 
+    const tasksTotal = selectedTasks.reduce((sum, t) => 
       sum + convertCurrency(t.amount || 0, t.currency || 'USD', targetCurrency, settings.usdToInrRate), 
     0);
+    return tasksTotal + roundOff;
   };
 
   const toggleTaskSelection = (taskId: string) => {
@@ -111,7 +175,7 @@ const InvoiceForm = () => {
         ? prev.taskIds.filter(id => id !== taskId)
         : [...prev.taskIds, taskId];
       
-      const totalAmount = calculateInvoiceTotal(newTaskIds, prev.currency);
+      const totalAmount = calculateInvoiceTotal(newTaskIds, prev.currency, prev.roundOff);
       
       return {
         ...prev,
@@ -121,12 +185,20 @@ const InvoiceForm = () => {
     });
   };
 
+  const handleRoundOffChange = (val: number) => {
+    setFormData(prev => ({
+      ...prev,
+      roundOff: val,
+      amount: calculateInvoiceTotal(prev.taskIds, prev.currency, val)
+    }));
+  };
+
   useEffect(() => {
     // Re-calculate amount if currency changes
     if (formData.taskIds.length > 0) {
       setFormData(prev => ({
         ...prev,
-        amount: calculateInvoiceTotal(prev.taskIds, prev.currency)
+        amount: calculateInvoiceTotal(prev.taskIds, prev.currency, prev.roundOff)
       }));
     }
   }, [formData.currency, settings.usdToInrRate]);
@@ -162,7 +234,7 @@ const InvoiceForm = () => {
           <motion.div 
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-2xl max-w-sm w-full border border-slate-200 dark:border-slate-800"
+            className="bg-[var(--card-bg)] p-6 rounded-2xl shadow-2xl max-w-sm w-full border border-[var(--border-color)]"
           >
             <h3 className="text-sm font-black uppercase tracking-widest mb-4">Quick Add Client</h3>
             <form onSubmit={handleAddClient} className="space-y-4">
@@ -247,7 +319,7 @@ const InvoiceForm = () => {
 
           <div className="space-y-1">
             <label className="label-caps">Link Tasks</label>
-            <div className="border border-[var(--border-color)] rounded p-1.5 max-h-32 overflow-y-auto space-y-1 bg-[var(--bg-main)]/50">
+            <div className="border border-[var(--border-color)] rounded p-1.5 max-h-32 overflow-y-auto space-y-1 bg-[var(--bg-secondary)]">
               {clientTasks.length === 0 ? (
                 <p className="p-2 text-center text-[10px] text-[var(--text-muted)] italic uppercase font-bold">No available tasks</p>
               ) : (
@@ -258,7 +330,7 @@ const InvoiceForm = () => {
                     className={`flex items-center justify-between px-2 py-1.5 rounded cursor-pointer transition-colors ${
                       formData.taskIds.includes(task.id) 
                         ? 'bg-[var(--primary)] text-white' 
-                        : 'hover:bg-[var(--bg-main)] text-[10px] font-bold uppercase text-[var(--text-secondary)] dark:text-[var(--text-muted)]'
+                        : 'hover:bg-[var(--bg-main)] text-[10px] font-bold uppercase text-[var(--text-secondary)]'
                     }`}
                   >
                     <span className="text-[10px] font-black uppercase truncate">{task.title}</span>
@@ -306,12 +378,14 @@ const InvoiceForm = () => {
               />
             </div>
             <div className="space-y-1">
-              <label className="label-caps">Reminder</label>
+              <label className="label-caps">Round Off Price</label>
               <input
-                type="datetime-local"
-                className="input font-bold h-9 py-1 text-xs"
-                value={formData.reminderDate}
-                onChange={(e) => setFormData({ ...formData, reminderDate: e.target.value })}
+                type="number"
+                step="0.01"
+                className="input font-bold h-9 py-1 text-xs text-right"
+                placeholder="0.00"
+                value={formData.roundOff}
+                onChange={(e) => handleRoundOffChange(parseFloat(e.target.value) || 0)}
               />
             </div>
           </div>

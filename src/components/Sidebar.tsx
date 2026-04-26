@@ -2,11 +2,11 @@ import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Users, CheckSquare, FileText, Landmark, LogOut, Sun, Moon, Settings as SettingsIcon, Menu, X, RefreshCw } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
-import { formatCurrency } from '../lib/formatters';
+import { formatCurrency, convertToINR } from '../lib/formatters';
 import { format } from 'date-fns';
 
 const Sidebar = () => {
-  const { settings, toggleTheme, refreshRates, ledger, profile, logout } = useAppContext();
+  const { settings, toggleTheme, refreshRates, ledger, invoices, profile, logout } = useAppContext();
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -30,13 +30,13 @@ const Sidebar = () => {
 
   const filteredLinks = links.filter(l => l.role === 'any' || (l.role === 'admin' && isAdmin));
 
-  const monthlyIncome = ledger
-    .filter(entry => {
-      const d = entry.date.toDate ? entry.date.toDate() : new Date(entry.date);
+  const monthlyInvoicedTotal = invoices
+    .filter(i => {
+      const d = i.createdAt.toDate ? i.createdAt.toDate() : new Date(i.createdAt);
       const now = new Date();
-      return entry.type === 'income' && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     })
-    .reduce((sum, entry) => sum + entry.amount, 0);
+    .reduce((sum, i) => sum + convertToINR(i.amount, i.currency, settings.usdToInrRate), 0);
 
   const SidebarContent = () => (
     <>
@@ -75,7 +75,7 @@ const Sidebar = () => {
         {isAdmin && (
           <div className="bg-[var(--bg-main)] p-4 rounded-xl border border-[var(--border-color)]">
             <p className="text-[10px] text-[var(--text-muted)] uppercase font-black tracking-widest mb-1">Monthly Revenue</p>
-            <p className="text-xl font-black text-[var(--income)] font-mono tracking-tighter">{formatCurrency(monthlyIncome, 'INR')}</p>
+            <p className="text-xl font-black text-[var(--income)] font-mono tracking-tighter">{formatCurrency(monthlyInvoicedTotal, 'INR')}</p>
             <div className="mt-4 pt-3 border-t border-[var(--divider-color)]">
               <div className="flex items-center justify-between gap-2 mb-2">
                 <p className="text-[9px] text-[var(--text-muted)] uppercase font-bold tracking-widest">Rate: {settings.usdToInrRate}</p>

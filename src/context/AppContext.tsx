@@ -17,6 +17,7 @@ interface AppContextType {
   deleteTask: (id: string) => Promise<void>;
   deleteInvoice: (id: string) => Promise<void>;
   deleteLedgerEntry: (id: string) => Promise<void>;
+  bulkDelete: (type: 'clients' | 'tasks' | 'invoices' | 'ledger', ids: string[]) => Promise<void>;
   toggleTheme: () => void;
   refreshRates: () => Promise<void>;
   loginWithPassword: (password: string) => Promise<boolean>;
@@ -277,6 +278,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const bulkDelete = async (type: 'clients' | 'tasks' | 'invoices' | 'ledger', ids: string[]) => {
+    if (ids.length === 0) return;
+    const confirmMsg = `Are you sure you want to delete ${ids.length} ${type}?`;
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      const promises = ids.map(id => deleteDoc(doc(db, type, id)));
+      await Promise.all(promises);
+      
+      // Update local states optimistically
+      const updateRef: Record<string, [any, any, string]> = {
+        clients: [clients, setClients, 'kworks_clients'],
+        tasks: [tasks, setTasks, 'kworks_tasks'],
+        invoices: [invoices, setInvoices, 'kworks_invoices'],
+        ledger: [ledger, setLedger, 'kworks_ledger'],
+      };
+
+      const [current, setter, key] = updateRef[type];
+      const next = current.filter((item: any) => !ids.includes(item.id));
+      setter(next);
+      localStorage.setItem(key, JSON.stringify(next));
+    } catch (e) {
+      console.error(`Bulk delete ${type} failed`, e);
+    }
+  };
+
   const value = {
     user,
     profile,
@@ -295,7 +322,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     deleteClient,
     deleteTask,
     deleteInvoice,
-    deleteLedgerEntry
+    deleteLedgerEntry,
+    bulkDelete
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

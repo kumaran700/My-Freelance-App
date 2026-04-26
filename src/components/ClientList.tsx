@@ -10,7 +10,8 @@ import {
   ChevronRight,
   MoreVertical,
   Trash2,
-  Edit
+  Edit,
+  CheckSquare
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { db, doc, deleteDoc } from '../lib/firebase';
@@ -18,10 +19,11 @@ import { motion } from 'motion/react';
 import { formatCurrency, convertToINR } from '../lib/formatters';
 
 const ClientList = () => {
-  const { clients, tasks, invoices, profile, settings, deleteClient } = useAppContext();
+  const { clients, tasks, invoices, profile, settings, deleteClient, bulkDelete } = useAppContext();
   const isAdmin = profile?.role === 'admin';
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const filteredClients = clients.filter(c => 
     c.name.toLowerCase().includes(search.toLowerCase()) || 
@@ -29,36 +31,77 @@ const ClientList = () => {
     c.company?.toLowerCase().includes(search.toLowerCase())
   );
 
+  const toggleSelectAll = () => {
+    if (selectedIds.length === filteredClients.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredClients.map(c => c.id));
+    }
+  };
+
+  const toggleSelect = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  const handleBulkDelete = async () => {
+    await bulkDelete('clients', selectedIds);
+    setSelectedIds([]);
+  };
+
   return (
     <div className="space-y-6">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-2">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-black tracking-tight text-[var(--text-heading)]">CLIENTS</h2>
           <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mt-2">Manage your client register and their history.</p>
         </div>
-        <button onClick={() => navigate('/clients/new')} className="btn-primary">
-          <UserPlus size={14} />
-          <span>NEW CLIENT</span>
-        </button>
+        <div className="flex items-center gap-3">
+          {isAdmin && selectedIds.length > 0 && (
+            <button 
+              onClick={handleBulkDelete}
+              className="btn h-10 px-4 bg-rose-500/10 text-rose-500 border-rose-500/20 hover:bg-rose-500 hover:text-white transition-all flex items-center gap-2 text-[10px] font-black uppercase tracking-widest"
+            >
+              <Trash2 size={14} />
+              <span>DELETE ({selectedIds.length})</span>
+            </button>
+          )}
+          <button onClick={() => navigate('/clients/new')} className="btn-primary">
+            <UserPlus size={14} />
+            <span>NEW CLIENT</span>
+          </button>
+        </div>
       </header>
 
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" size={14} />
-        <input
-          type="text"
-          placeholder="Search by name, email or company..."
-          className="input pl-10"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      <div className="flex flex-col md:flex-row gap-3">
+        <div className="flex items-center gap-3 flex-1">
+          <div 
+            onClick={toggleSelectAll}
+            className="flex items-center gap-2 px-3 h-10 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg cursor-pointer hover:border-[var(--primary)] transition-colors shrink-0"
+          >
+            <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${selectedIds.length === filteredClients.length && filteredClients.length > 0 ? 'bg-[var(--primary)] border-[var(--primary)]' : 'border-[var(--border-color)]'}`}>
+              {selectedIds.length === filteredClients.length && filteredClients.length > 0 && <CheckSquare size={10} className="text-white" />}
+            </div>
+            <span className="text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)]">Select All</span>
+          </div>
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" size={14} />
+            <input
+              type="text"
+              placeholder="Search by name, email or company..."
+              className="input pl-10"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {filteredClients.map((client) => {
           const clientTasks = tasks.filter(t => t.clientId === client.id);
           const clientInvoices = invoices.filter(i => i.clientId === client.id);
-          
-          const totalInvoiced = clientInvoices.reduce((sum, inv) => 
+          const pendingBalance = clientInvoices.filter(i => i.status !== 'paid').reduce((sum, inv) => 
             sum + convertToINR(inv.amount, inv.currency, settings.usdToInrRate), 0
           );
 
@@ -69,9 +112,17 @@ const ClientList = () => {
               animate={{ opacity: 1, y: 0 }}
               key={client.id}
               onClick={() => navigate(`/clients/${client.id}`)}
-              className="card group cursor-pointer hover:border-[var(--primary)]"
+              className={`card group cursor-pointer hover:border-[var(--primary)] relative border-2 ${selectedIds.includes(client.id) ? 'border-[var(--primary)] shadow-xl' : 'border-transparent'}`}
             >
-              <div className="p-5 space-y-4">
+              {/* Selection Checkbox */}
+              <div 
+                className="absolute top-3 left-3 z-10 w-5 h-5 rounded border bg-[var(--bg-secondary)] border-[var(--border-color)] flex items-center justify-center cursor-pointer hover:border-[var(--primary)] transition-all"
+                onClick={(e) => toggleSelect(client.id, e)}
+              >
+                {selectedIds.includes(client.id) && <CheckSquare size={12} className="text-[var(--primary)]" />}
+              </div>
+
+              <div className="p-5 space-y-4 pt-10">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-[var(--bg-main)] text-[var(--primary)] flex items-center justify-center font-black text-base uppercase shrink-0 border border-[var(--border-color)]">
                     {client.name.charAt(0)}
@@ -149,9 +200,9 @@ const ClientList = () => {
 
                 {isAdmin && (
                   <div className="pt-3 border-t border-[var(--divider-color)]">
-                     <p className="label-caps text-[var(--primary)]">Total Invoiced</p>
+                     <p className="label-caps text-[var(--pending)]">Pending Balance</p>
                      <p className="text-lg font-black text-[var(--text-heading)] tracking-tight">
-                       {formatCurrency(totalInvoiced, 'INR')}
+                       {formatCurrency(pendingBalance, 'INR')}
                      </p>
                   </div>
                 )}

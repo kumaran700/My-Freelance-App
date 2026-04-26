@@ -25,6 +25,7 @@ const TaskForm = () => {
     status: 'pending' as any,
     dueDate: '',
     reminderDate: '',
+    roundOff: 0,
     checklist: [] as { id: string; text: string; price: number; completed: boolean }[]
   });
 
@@ -65,6 +66,7 @@ const TaskForm = () => {
           status: task.status,
           dueDate: task.dueDate ? new Date(task.dueDate.toDate ? task.dueDate.toDate() : task.dueDate).toISOString().split('T')[0] : '',
           reminderDate: task.reminderDate ? new Date(task.reminderDate.toDate ? task.reminderDate.toDate() : task.reminderDate).toISOString().slice(0, 16) : '',
+          roundOff: task.roundOff || 0,
           checklist: task.checklist || []
         });
       }
@@ -99,8 +101,8 @@ const TaskForm = () => {
     }
   };
 
-  const calculateTotal = (list: any[]) => {
-    return list.reduce((sum, item) => sum + (item.price || 0), 0);
+  const calculateTotal = (list: any[], roundOff: number) => {
+    return list.reduce((sum, item) => sum + (item.price || 0), 0) + roundOff;
   };
 
   const addChecklistItem = () => {
@@ -117,11 +119,21 @@ const TaskForm = () => {
       setFormData({
         ...formData,
         checklist: newList,
-        amount: calculateTotal(newList)
+        amount: calculateTotal(newList, formData.roundOff)
       });
       setNewChecklistText('');
       setNewChecklistPrice('');
     }
+  };
+
+  const updateChecklistItem = (index: number, field: string, value: string | number) => {
+    const newList = [...formData.checklist];
+    newList[index] = { ...newList[index], [field]: value };
+    setFormData({
+      ...formData,
+      checklist: newList,
+      amount: calculateTotal(newList, formData.roundOff)
+    });
   };
 
   const removeChecklistItem = (index: number) => {
@@ -130,7 +142,15 @@ const TaskForm = () => {
     setFormData({ 
       ...formData, 
       checklist: newList,
-      amount: calculateTotal(newList)
+      amount: calculateTotal(newList, formData.roundOff)
+    });
+  };
+
+  const handleRoundOffChange = (val: number) => {
+    setFormData({
+      ...formData,
+      roundOff: val,
+      amount: calculateTotal(formData.checklist, val)
     });
   };
 
@@ -141,7 +161,7 @@ const TaskForm = () => {
           <motion.div 
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-2xl max-w-sm w-full border border-slate-200 dark:border-slate-800"
+            className="bg-[var(--card-bg)] p-6 rounded-2xl shadow-2xl max-w-sm w-full border border-[var(--border-color)]"
           >
             <h3 className="text-sm font-black uppercase tracking-widest mb-4">Quick Add Client</h3>
             <form onSubmit={handleAddClient} className="space-y-4">
@@ -263,16 +283,30 @@ const TaskForm = () => {
           {isAdmin && (
             <div className="space-y-2">
               <label className="label-caps">Itemized Checklist & Pricing</label>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 {formData.checklist.map((item, idx) => (
-                  <div key={item.id || idx} className="flex items-center gap-1.5">
-                    <div className="flex-1 px-3 py-2 bg-[var(--bg-main)] rounded border border-[var(--border-color)] text-[10px] uppercase font-black flex items-center justify-between">
-                      <span className="truncate">{item.text}</span>
-                      <span className="text-[var(--primary)] ml-2">{formatCurrency(item.price, formData.currency)}</span>
+                  <div key={item.id || idx} className="grid grid-cols-12 gap-1.5 items-center p-2 bg-[var(--bg-main)] rounded border border-[var(--border-color)] group/item">
+                    <div className="col-span-7">
+                      <input 
+                        type="text" 
+                        value={item.text} 
+                        onChange={(e) => updateChecklistItem(idx, 'text', e.target.value)}
+                        className="w-full bg-transparent border-none p-0 text-[10px] font-black uppercase tracking-tight focus:ring-0"
+                      />
                     </div>
-                    <button type="button" onClick={() => removeChecklistItem(idx)} className="w-8 h-8 flex items-center justify-center text-[var(--text-muted)] hover:text-rose-500 transition-colors">
-                      <X size={14} />
-                    </button>
+                    <div className="col-span-3">
+                      <input 
+                        type="number" 
+                        value={item.price} 
+                        onChange={(e) => updateChecklistItem(idx, 'price', parseFloat(e.target.value) || 0)}
+                        className="w-full bg-transparent border-none p-0 text-[10px] font-black text-[var(--primary)] text-right focus:ring-0"
+                      />
+                    </div>
+                    <div className="col-span-2 flex justify-end">
+                      <button type="button" onClick={() => removeChecklistItem(idx)} className="text-[var(--text-muted)] hover:text-rose-500 transition-colors">
+                        <X size={14} />
+                      </button>
+                    </div>
                   </div>
                 ))}
                 
@@ -314,7 +348,7 @@ const TaskForm = () => {
               <label className="label-caps">Task Checklist</label>
               <div className="space-y-1.5">
                 {formData.checklist.map((item, idx) => (
-                  <div key={item.id || idx} className="flex px-3 py-2 bg-slate-50 dark:bg-slate-800 rounded border border-slate-100 dark:border-slate-700 text-[10px] uppercase font-black">
+                  <div key={item.id || idx} className="flex px-3 py-2 bg-[var(--bg-main)] rounded border border-[var(--border-color)] text-[10px] uppercase font-black">
                     <span className="truncate">{item.text}</span>
                   </div>
                 ))}
@@ -333,14 +367,26 @@ const TaskForm = () => {
               />
             </div>
             <div className="space-y-1">
-              <label className="label-caps">Reminder</label>
+              <label className="label-caps">Round Off Price</label>
               <input
-                type="datetime-local"
+                type="number"
+                step="0.01"
                 className="input font-bold h-9 py-1 text-xs"
-                value={formData.reminderDate}
-                onChange={(e) => setFormData({ ...formData, reminderDate: e.target.value })}
+                placeholder="0.00"
+                value={formData.roundOff}
+                onChange={(e) => handleRoundOffChange(parseFloat(e.target.value) || 0)}
               />
             </div>
+          </div>
+
+          <div className="space-y-1">
+            <label className="label-caps">Reminder</label>
+            <input
+              type="datetime-local"
+              className="input font-bold h-9 py-1 text-xs"
+              value={formData.reminderDate}
+              onChange={(e) => setFormData({ ...formData, reminderDate: e.target.value })}
+            />
           </div>
 
           <div className="pt-2 flex gap-2">

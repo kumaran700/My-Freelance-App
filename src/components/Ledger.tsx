@@ -9,7 +9,8 @@ import {
   Trash2, 
   Calendar,
   ChevronDown,
-  Printer
+  Printer,
+  CheckSquare
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { format } from 'date-fns';
@@ -19,12 +20,13 @@ import { generateStatementPDF } from '../lib/pdfGenerator';
 import { formatCurrency } from '../lib/formatters';
 
 const Ledger = () => {
-  const { ledger, deleteLedgerEntry } = useAppContext();
+  const { ledger, deleteLedgerEntry, bulkDelete } = useAppContext();
   const navigate = useNavigate();
   
   const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all');
   const [sortOrder, setSortOrder] = useState<'recent' | 'oldest'>('recent');
   const [search, setSearch] = useState('');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const filteredLedger = ledger
     .filter(entry => {
@@ -39,6 +41,23 @@ const Ledger = () => {
       return sortOrder === 'recent' ? dateB.getTime() - dateA.getTime() : dateA.getTime() - dateB.getTime();
     });
 
+  const toggleSelectAll = () => {
+    if (selectedIds.length === filteredLedger.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredLedger.map(l => l.id));
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  const handleBulkDelete = async () => {
+    await bulkDelete('ledger', selectedIds);
+    setSelectedIds([]);
+  };
+
   const totalIncome = ledger.filter(e => e.type === 'income').reduce((sum, e) => sum + e.amount, 0);
   const totalExpense = ledger.filter(e => e.type === 'expense').reduce((sum, e) => sum + e.amount, 0);
   const balance = totalIncome - totalExpense;
@@ -51,6 +70,15 @@ const Ledger = () => {
           <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mt-2">Track your income and expenses in INR.</p>
         </div>
         <div className="flex gap-2">
+          {selectedIds.length > 0 && (
+            <button 
+              onClick={handleBulkDelete}
+              className="btn px-4 bg-rose-500/10 text-rose-500 border-rose-500/20 hover:bg-rose-500 hover:text-white transition-all flex items-center gap-2 text-[10px] font-black uppercase tracking-widest"
+            >
+              <Trash2 size={14} />
+              <span>DELETE ({selectedIds.length})</span>
+            </button>
+          )}
           <button 
             onClick={() => generateStatementPDF(filteredLedger, 'KARTHICK KUMARAN M')}
             className="btn-secondary"
@@ -119,6 +147,14 @@ const Ledger = () => {
           <table className="w-full text-left">
             <thead className="bg-[var(--bg-main)] text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest border-b border-[var(--border-color)]">
               <tr>
+                <th className="px-6 py-4 w-10">
+                   <div 
+                    onClick={toggleSelectAll}
+                    className={`w-4 h-4 rounded border flex items-center justify-center transition-all cursor-pointer ${selectedIds.length === filteredLedger.length && filteredLedger.length > 0 ? 'bg-[var(--primary)] border-[var(--primary)]' : 'border-[var(--border-color)]'}`}
+                  >
+                    {selectedIds.length === filteredLedger.length && filteredLedger.length > 0 && <CheckSquare size={10} className="text-white" />}
+                  </div>
+                </th>
                 <th className="px-6 py-4">Date</th>
                 <th className="px-6 py-4">Description</th>
                 <th className="px-6 py-4">Category</th>
@@ -137,6 +173,14 @@ const Ledger = () => {
                     key={entry.id} 
                     className="hover:bg-[var(--bg-main)]/50 transition-colors group"
                   >
+                    <td className="px-6 py-4">
+                      <div 
+                        onClick={() => toggleSelect(entry.id)}
+                        className={`w-4 h-4 rounded border flex items-center justify-center transition-all cursor-pointer ${selectedIds.includes(entry.id) ? 'bg-[var(--primary)] border-[var(--primary)]' : 'border-[var(--border-color)]'}`}
+                      >
+                        {selectedIds.includes(entry.id) && <CheckSquare size={10} className="text-white" />}
+                      </div>
+                    </td>
                     <td className="px-6 py-4 text-[11px] font-bold text-[var(--text-muted)] uppercase">
                       {format(entry.date.toDate ? entry.date.toDate() : new Date(entry.date), 'MMM d, yyyy')}
                     </td>

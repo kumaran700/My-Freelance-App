@@ -23,11 +23,12 @@ import { motion, AnimatePresence } from 'motion/react';
 import { formatCurrency } from '../lib/formatters';
 
 const TaskList = () => {
-  const { tasks, clients, profile, deleteTask } = useAppContext();
+  const { tasks, clients, profile, deleteTask, bulkDelete } = useAppContext();
   const isAdmin = profile?.role === 'admin';
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const filteredTasks = tasks.filter(t => {
     const matchesSearch = t.title.toLowerCase().includes(search.toLowerCase()) || 
@@ -35,6 +36,23 @@ const TaskList = () => {
     const matchesFilter = filter === 'all' || t.status === filter;
     return matchesSearch && matchesFilter;
   });
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === filteredTasks.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredTasks.map(t => t.id));
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  const handleBulkDelete = async () => {
+    await bulkDelete('tasks', selectedIds);
+    setSelectedIds([]);
+  };
 
   const toggleChecklist = async (taskId: string, index: number) => {
     const task = tasks.find(t => t.id === taskId);
@@ -46,27 +64,49 @@ const TaskList = () => {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-2">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-black tracking-tight text-[var(--text-heading)]">TASKS</h2>
           <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider mt-2">Manage your active work and reminders.</p>
         </div>
-        <button onClick={() => navigate('/tasks/new')} className="btn-primary">
-          <Plus size={14} />
-          <span>NEW TASK</span>
-        </button>
+        <div className="flex items-center gap-3">
+          {isAdmin && selectedIds.length > 0 && (
+            <button 
+              onClick={handleBulkDelete}
+              className="btn h-10 px-4 bg-rose-500/10 text-rose-500 border-rose-500/20 hover:bg-rose-500 hover:text-white transition-all flex items-center gap-2 text-[10px] font-black uppercase tracking-widest"
+            >
+              <Trash2 size={14} />
+              <span>DELETE ({selectedIds.length})</span>
+            </button>
+          )}
+          <button onClick={() => navigate('/tasks/new')} className="btn-primary">
+            <Plus size={14} />
+            <span>NEW TASK</span>
+          </button>
+        </div>
       </header>
 
       <div className="flex flex-col md:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" size={14} />
-          <input
-            type="text"
-            placeholder="Search tasks or clients..."
-            className="input pl-10"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+        <div className="flex items-center gap-3 flex-1">
+          <div 
+            onClick={toggleSelectAll}
+            className="flex items-center gap-2 px-3 h-10 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg cursor-pointer hover:border-[var(--primary)] transition-colors"
+          >
+            <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${selectedIds.length === filteredTasks.length && filteredTasks.length > 0 ? 'bg-[var(--primary)] border-[var(--primary)]' : 'border-[var(--border-color)]'}`}>
+              {selectedIds.length === filteredTasks.length && filteredTasks.length > 0 && <CheckSquare size={10} className="text-white" />}
+            </div>
+            <span className="text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)]">Select All</span>
+          </div>
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" size={14} />
+            <input
+              type="text"
+              placeholder="Search tasks or clients..."
+              className="input pl-10"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
         </div>
         <div className="flex gap-2">
           <select 
@@ -92,9 +132,20 @@ const TaskList = () => {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.98 }}
               key={task.id}
-              className="card flex flex-col group h-fit"
+              className={`card flex flex-col group h-fit relative border-2 transition-all ${selectedIds.includes(task.id) ? 'border-[var(--primary)] shadow-xl' : 'border-transparent'}`}
             >
-              <div className="p-5 flex-1 space-y-4">
+              {/* Selection Checkbox */}
+              <div 
+                className="absolute top-3 left-3 z-10 w-5 h-5 rounded border bg-[var(--bg-secondary)] border-[var(--border-color)] flex items-center justify-center cursor-pointer hover:border-[var(--primary)] transition-all"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleSelect(task.id);
+                }}
+              >
+                {selectedIds.includes(task.id) && <CheckSquare size={12} className="text-[var(--primary)]" />}
+              </div>
+
+              <div className="p-5 flex-1 space-y-4 pt-10">
                 <div className="flex justify-between items-start gap-2">
                   <div className="flex flex-wrap gap-1.5">
                     <span className={`badge ${
@@ -183,7 +234,7 @@ const TaskList = () => {
                   )}
                 </div>
 
-                {isAdmin && task.status !== 'invoiced' && (
+                {isAdmin && task.status !== 'invoiced' && !task.isInvoiced && (
                   <button 
                     onClick={() => navigate(`/invoices/new?taskId=${task.id}`)}
                     className="flex items-center gap-1.5 text-[10px] font-black text-[var(--primary)] hover:text-[var(--primary-hover)] uppercase tracking-widest decoration-2 underline-offset-4 hover:underline"
