@@ -5,7 +5,7 @@ import { motion } from 'motion/react';
 import { useAppContext } from '../context/AppContext';
 import { db, collection, doc, setDoc, updateDoc, deleteDoc, getDocs, query, where, Timestamp } from '../lib/firebase';
 
-import { convertCurrency } from '../lib/formatters';
+import { convertCurrency, formatCurrency } from '../lib/formatters';
 
 const InvoiceForm = () => {
   const { id } = useParams();
@@ -21,14 +21,16 @@ const InvoiceForm = () => {
     taskIds: [] as string[],
     invoiceNumber: `INV-${Date.now().toString().slice(-6)}`,
     amount: 0,
+    advancePaid: 0,
     roundOff: 0,
     currency: 'INR' as 'USD' | 'INR',
-    status: 'draft' as any,
+    status: 'draft' as 'draft' | 'sent' | 'paid' | 'overdue' | 'archived' | 'partially_paid',
     dueDate: '',
     reminderDate: '',
   });
 
   const [oldStatus, setOldStatus] = useState<string>('');
+  const [oldAdvance, setOldAdvance] = useState<number>(0);
 
   useEffect(() => {
     if (preSelectedTaskId) {
@@ -52,11 +54,13 @@ const InvoiceForm = () => {
       const invoice = invoices.find(i => i.id === id);
       if (invoice) {
         setOldStatus(invoice.status);
+        setOldAdvance(invoice.advancePaid || 0);
         setFormData({
           clientId: invoice.clientId,
           taskIds: invoice.taskIds || [],
           invoiceNumber: invoice.invoiceNumber,
           amount: invoice.amount,
+          advancePaid: invoice.advancePaid || 0,
           roundOff: invoice.roundOff || 0,
           currency: invoice.currency,
           status: invoice.status,
@@ -71,8 +75,25 @@ const InvoiceForm = () => {
     e.preventDefault();
     if (!user) return;
 
+    // Logic: Status auto-updates based on advance vs total
+    let finalStatus = formData.status;
+    const balance = formData.amount - formData.advancePaid;
+    
+    if (formData.advancePaid > 0) {
+      if (balance <= 0) {
+        finalStatus = 'paid';
+      } else {
+        finalStatus = 'partially_paid';
+      }
+    } else if (finalStatus === 'paid' || finalStatus === 'partially_paid') {
+      // If manually set to paid but advance is 0, we treat it as fully paid
+      formData.advancePaid = formData.amount;
+      finalStatus = 'paid';
+    }
+
     const invoiceData = {
       ...formData,
+      status: finalStatus,
       ownerId: user.uid,
       dueDate: formData.dueDate ? Timestamp.fromDate(new Date(formData.dueDate)) : null,
       reminderDate: formData.reminderDate ? Timestamp.fromDate(new Date(formData.reminderDate)) : null,
@@ -80,80 +101,44 @@ const InvoiceForm = () => {
     };
 
     try {
+      let savedId = id;
       if (id) {
         await updateDoc(doc(db, 'invoices', id), invoiceData);
-        
-        // Ledger Sync Logic
-        if (oldStatus !== 'paid' && formData.status === 'paid') {
-          // Create ledger entry
-          const amountInInr = formData.currency === 'USD' ? formData.amount * settings.usdToInrRate : formData.amount;
-          const ledgerRef = doc(collection(db, 'ledger'));
-          await setDoc(ledgerRef, {
-            type: 'income',
-            amount: amountInInr,
-            originalAmount: formData.amount,
-            originalCurrency: formData.currency,
-            description: `Payment for Invoice #${formData.invoiceNumber}`,
-            category: 'Invoice Payment',
-            date: Timestamp.now(),
-            invoiceId: id,
-            ownerId: user.uid,
-            createdAt: Timestamp.now()
-          });
-        } else if (oldStatus === 'paid' && formData.status !== 'paid') {
-          // Delete ledger entry
-          const q = query(collection(db, 'ledger'), where('invoiceId', '==', id));
-          const snapshot = await getDocs(q);
-          snapshot.forEach(async (d) => {
-            await deleteDoc(doc(db, 'ledger', d.id));
-          });
-        } else if (oldStatus === 'paid' && formData.status === 'paid') {
-          // Update ledger entry if needed
-          const q = query(collection(db, 'ledger'), where('invoiceId', '==', id));
-          const snapshot = await getDocs(q);
-          const amountInInr = formData.currency === 'USD' ? formData.amount * settings.usdToInrRate : formData.amount;
-          snapshot.forEach(async (d) => {
-            await updateDoc(doc(db, 'ledger', d.id), {
-              amount: amountInInr,
-              originalAmount: formData.amount,
-              originalCurrency: formData.currency,
-              description: `Payment for Invoice #${formData.invoiceNumber}`,
-              updatedAt: Timestamp.now()
-            });
-          });
-        }
       } else {
         const newDocRef = doc(collection(db, 'invoices'));
         await setDoc(newDocRef, {
           ...invoiceData,
           createdAt: Timestamp.now()
         });
+        savedId = newDocRef.id;
 
-        // Handle auto-paid upon creation
-        if (formData.status === 'paid') {
-           const amountInInr = formData.currency === 'USD' ? formData.amount * settings.usdToInrRate : formData.amount;
-           const ledgerRef = doc(collection(db, 'ledger'));
-           await setDoc(ledgerRef, {
-             type: 'income',
-             amount: amountInInr,
-             originalAmount: formData.amount,
-             originalCurrency: formData.currency,
-             description: `Payment for Invoice #${formData.invoiceNumber}`,
-             category: 'Invoice Payment',
-             date: Timestamp.now(),
-             invoiceId: newDocRef.id,
-             ownerId: user.uid,
-             createdAt: Timestamp.now()
-           });
-        }
-
-        // If we created this invoice from tasks, mark those tasks as invoiced
+        // Mark tasks as invoiced
         if (formData.taskIds.length > 0) {
           for (const taskId of formData.taskIds) {
             await updateDoc(doc(db, 'tasks', taskId), { isInvoiced: true });
           }
         }
       }
+
+      // Sync with Ledger: If advance increased, record income
+      if (formData.advancePaid > oldAdvance) {
+        const paymentReceived = formData.advancePaid - oldAdvance;
+        const amountInInr = formData.currency === 'USD' ? paymentReceived * settings.usdToInrRate : paymentReceived;
+        
+        await setDoc(doc(collection(db, 'ledger')), {
+          type: 'income',
+          amount: amountInInr,
+          originalAmount: paymentReceived,
+          originalCurrency: formData.currency,
+          description: `Payment for Invoice #${formData.invoiceNumber}`,
+          category: 'Invoice Payment',
+          date: Timestamp.now(),
+          invoiceId: savedId,
+          ownerId: user.uid,
+          createdAt: Timestamp.now()
+        });
+      }
+
       navigate('/invoices');
     } catch (error) {
       console.error("Error saving invoice", error);
@@ -183,6 +168,16 @@ const InvoiceForm = () => {
         amount: totalAmount || prev.amount
       };
     });
+  };
+
+  const handleAddPayment = () => {
+    const additional = prompt("Enter payment amount to add:");
+    if (additional && !isNaN(parseFloat(additional))) {
+      setFormData(prev => ({
+        ...prev,
+        advancePaid: prev.advancePaid + parseFloat(additional)
+      }));
+    }
   };
 
   const handleRoundOffChange = (val: number) => {
@@ -378,7 +373,7 @@ const InvoiceForm = () => {
               />
             </div>
             <div className="space-y-1">
-              <label className="label-caps">Round Off Price</label>
+              <label className="label-caps">Round Off</label>
               <input
                 type="number"
                 step="0.01"
@@ -388,6 +383,41 @@ const InvoiceForm = () => {
                 onChange={(e) => handleRoundOffChange(parseFloat(e.target.value) || 0)}
               />
             </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-[var(--border-color)]">
+             <div className="space-y-1">
+                <label className="label-caps text-[var(--income)]">Advance Paid</label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="input font-black h-11 text-base text-emerald-500 bg-emerald-500/5 border-emerald-500/20"
+                      placeholder="0.00"
+                      value={formData.advancePaid}
+                      onChange={(e) => setFormData({ ...formData, advancePaid: parseFloat(e.target.value) || 0 })}
+                    />
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black uppercase text-emerald-500/50">Total</div>
+                  </div>
+                  <button 
+                    type="button"
+                    onClick={handleAddPayment}
+                    className="px-4 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors flex items-center justify-center"
+                    title="Add Payment"
+                  >
+                    <Plus size={18} />
+                  </button>
+                </div>
+             </div>
+             <div className="space-y-1">
+                <label className="label-caps text-[var(--pending)]">Balance Due</label>
+                <div className="h-11 px-4 flex items-center bg-rose-500/5 border border-rose-500/20 rounded-lg">
+                   <p className="text-base font-black text-rose-500 tracking-tight">
+                     {formatCurrency(formData.amount - formData.advancePaid, formData.currency)}
+                   </p>
+                </div>
+             </div>
           </div>
 
           <div className="pt-2 flex gap-2">

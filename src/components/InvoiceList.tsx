@@ -17,13 +17,13 @@ import {
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { format } from 'date-fns';
-import { db, doc, updateDoc, Timestamp, deleteDoc } from '../lib/firebase';
+import { db, doc, updateDoc, Timestamp, deleteDoc, setDoc, collection } from '../lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { downloadInvoicePDF } from '../lib/pdfGenerator';
 import { formatCurrency } from '../lib/formatters';
 
 const InvoiceList = () => {
-  const { invoices, clients, tasks, profile, settings, deleteInvoice, bulkDelete } = useAppContext();
+  const { user, invoices, clients, tasks, profile, settings, deleteInvoice, bulkDelete } = useAppContext();
   const isAdmin = profile?.role === 'admin';
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
@@ -56,11 +56,43 @@ const InvoiceList = () => {
     setSelectedIds([]);
   };
 
-  const updateInvoiceStatus = async (invoiceId: string, newStatus: string, e: React.MouseEvent) => {
+  const updateInvoiceStatus = async (invoiceId: string, newStatus: string, e: React.ChangeEvent<HTMLSelectElement>) => {
     e.stopPropagation();
+    if (!user) return;
+    
     try {
+      const invoice = invoices.find(i => i.id === invoiceId);
+      if (!invoice) return;
+
+      const oldStatus = invoice.status;
+      
+      // Update the invoice status
       await updateDoc(doc(db, 'invoices', invoiceId), { status: newStatus, updatedAt: Timestamp.now() });
-      // Note: Ledger sync is handled in InvoiceView or by a listener if implemented
+
+      // If transition to paid, record remaining balance as income
+      if (oldStatus !== 'paid' && newStatus === 'paid') {
+        const alreadyPaid = invoice.advancePaid || 0;
+        const remainingBalance = invoice.amount - alreadyPaid;
+        
+        if (remainingBalance > 0) {
+          const amountInInr = invoice.currency === 'USD' ? remainingBalance * settings.usdToInrRate : remainingBalance;
+          await setDoc(doc(collection(db, 'ledger')), {
+            type: 'income',
+            amount: amountInInr,
+            originalAmount: remainingBalance,
+            originalCurrency: invoice.currency,
+            description: `Final Payment for Invoice #${invoice.invoiceNumber}`,
+            category: 'Invoice Payment',
+            date: Timestamp.now(),
+            invoiceId: invoiceId,
+            ownerId: user.uid,
+            createdAt: Timestamp.now()
+          });
+        }
+        
+        // Also update advancePaid to full amount
+        await updateDoc(doc(db, 'invoices', invoiceId), { advancePaid: invoice.amount });
+      }
     } catch (error) {
       console.error("Update status failed", error);
     }
@@ -167,18 +199,21 @@ const InvoiceList = () => {
                         onChange={(e) => updateInvoiceStatus(invoice.id, e.target.value, e as any)}
                         className={`text-[9px] font-black uppercase tracking-tight px-2 py-1 rounded-md border appearance-none cursor-pointer ${
                           invoice.status === 'paid' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
+                          invoice.status === 'partially_paid' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
                           invoice.status === 'sent' ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' :
                           'bg-[var(--bg-main)] text-[var(--text-muted)] border-[var(--border-color)]'
                         }`}
                       >
                         <option value="draft">DRAFT</option>
                         <option value="sent">SENT</option>
+                        <option value="partially_paid">PARTIAL</option>
                         <option value="paid">PAID</option>
                         <option value="overdue">OVERDUE</option>
                       </select>
                     ) : (
                       <div className={`badge ${
                         invoice.status === 'paid' ? 'badge-paid' :
+                        invoice.status === 'partially_paid' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
                         invoice.status === 'sent' ? 'badge-sent' :
                         'bg-[var(--bg-main)] text-[var(--text-muted)]'
                       }`}>

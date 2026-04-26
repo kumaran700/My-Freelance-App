@@ -10,30 +10,59 @@ import {
   Calendar,
   ChevronDown,
   Printer,
-  CheckSquare
+  CheckSquare,
+  X
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
-import { format } from 'date-fns';
+import { format, startOfMonth, endOfMonth, subMonths, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
 import { db, doc, deleteDoc } from '../lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { generateStatementPDF } from '../lib/pdfGenerator';
 import { formatCurrency } from '../lib/formatters';
 
 const Ledger = () => {
-  const { ledger, deleteLedgerEntry, bulkDelete } = useAppContext();
+  const { user, profile, ledger, deleteLedgerEntry, bulkDelete } = useAppContext();
   const navigate = useNavigate();
   
   const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all');
+  const [dateFilter, setDateFilter] = useState<'all' | 'this_month' | 'last_month' | 'custom'>('all');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [sortOrder, setSortOrder] = useState<'recent' | 'oldest'>('recent');
   const [search, setSearch] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const filteredLedger = ledger
     .filter(entry => {
+      const entryDate = entry.date.toDate ? entry.date.toDate() : new Date(entry.date);
+      
+      // Type Match
       const matchesType = filterType === 'all' || entry.type === filterType;
+      
+      // Search Match
       const matchesSearch = entry.description.toLowerCase().includes(search.toLowerCase()) || 
                             entry.category.toLowerCase().includes(search.toLowerCase());
-      return matchesType && matchesSearch;
+      
+      // Date Match
+      let matchesDate = true;
+      const today = new Date();
+      
+      if (dateFilter === 'this_month') {
+        const start = startOfMonth(today);
+        const end = endOfMonth(today);
+        matchesDate = isWithinInterval(entryDate, { start, end });
+      } else if (dateFilter === 'last_month') {
+        const lastMonth = subMonths(today, 1);
+        const start = startOfMonth(lastMonth);
+        const end = endOfMonth(lastMonth);
+        matchesDate = isWithinInterval(entryDate, { start, end });
+      } else if (dateFilter === 'custom' && startDate && endDate) {
+        const start = startOfDay(new Date(startDate));
+        const end = endOfDay(new Date(endDate));
+        matchesDate = isWithinInterval(entryDate, { start, end });
+      }
+
+      return matchesType && matchesSearch && matchesDate;
     })
     .sort((a, b) => {
       const dateA = a.date.toDate ? a.date.toDate() : new Date(a.date);
@@ -58,8 +87,8 @@ const Ledger = () => {
     setSelectedIds([]);
   };
 
-  const totalIncome = ledger.filter(e => e.type === 'income').reduce((sum, e) => sum + e.amount, 0);
-  const totalExpense = ledger.filter(e => e.type === 'expense').reduce((sum, e) => sum + e.amount, 0);
+  const totalIncome = filteredLedger.filter(e => e.type === 'income').reduce((sum, e) => sum + e.amount, 0);
+  const totalExpense = filteredLedger.filter(e => e.type === 'expense').reduce((sum, e) => sum + e.amount, 0);
   const balance = totalIncome - totalExpense;
 
   return (
@@ -80,7 +109,7 @@ const Ledger = () => {
             </button>
           )}
           <button 
-            onClick={() => generateStatementPDF(filteredLedger, 'KARTHICK KUMARAN M')}
+            onClick={() => generateStatementPDF(filteredLedger)}
             className="btn-secondary"
           >
             <Printer size={14} />
@@ -92,54 +121,104 @@ const Ledger = () => {
           </button>
         </div>
       </header>
-
+      
       {/* Summary Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="card p-5 border-l-4 border-[var(--income)]">
-          <p className="label-caps mb-1">Total Income</p>
+        
+          <p className="label-caps mb-1">Total Income (Filtered)</p>
           <h3 className="text-xl font-black text-[var(--income)]">{formatCurrency(totalIncome, 'INR')}</h3>
         </div>
         <div className="card p-5 border-l-4 border-[var(--expense)]">
-          <p className="label-caps mb-1">Total Expenses</p>
+          <p className="label-caps mb-1">Total Expenses (Filtered)</p>
           <h3 className="text-xl font-black text-[var(--expense)]">{formatCurrency(totalExpense, 'INR')}</h3>
         </div>
         <div className="card p-5 border-l-4 border-[var(--primary)]">
-          <p className="label-caps mb-1">Net Balance</p>
+          <p className="label-caps mb-1">Net Balance (Filtered)</p>
           <h3 className={`text-xl font-black ${balance >= 0 ? 'text-[var(--text-heading)]' : 'text-[var(--expense)]'}`}>{formatCurrency(balance, 'INR')}</h3>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col md:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" size={14} />
-          <input
-            type="text"
-            placeholder="Search entries..."
-            className="input pl-10"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+      <div className="space-y-4">
+        <div className="flex flex-col md:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" size={14} />
+            <input
+              type="text"
+              placeholder="Search entries..."
+              className="input pl-10"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <div className="flex gap-2">
+            <select 
+              className="input h-10 text-xs font-bold uppercase py-1 px-4 w-40"
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value as any)}
+            >
+              <option value="all">ALL TYPES</option>
+              <option value="income">INCOME</option>
+              <option value="expense">EXPENSE</option>
+            </select>
+            <select 
+              className="input h-10 text-xs font-bold uppercase py-1 px-4 w-40"
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value as any)}
+            >
+              <option value="all">ALL DATES</option>
+              <option value="this_month">THIS MONTH</option>
+              <option value="last_month">LAST MONTH</option>
+              <option value="custom">CUSTOM RANGE</option>
+            </select>
+            <select 
+              className="input h-10 text-xs font-bold uppercase py-1 px-4 w-40"
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value as any)}
+            >
+              <option value="recent">RECENT FIRST</option>
+              <option value="oldest">OLDEST FIRST</option>
+            </select>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <select 
-            className="input h-10 text-xs font-bold uppercase py-1 px-4 w-40"
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value as any)}
+
+        {dateFilter === 'custom' && (
+          <motion.div 
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center gap-2 p-3 bg-[var(--bg-main)] rounded-xl border border-[var(--border-color)]"
           >
-            <option value="all">ALL TYPES</option>
-            <option value="income">INCOME</option>
-            <option value="expense">EXPENSE</option>
-          </select>
-          <select 
-            className="input h-10 text-xs font-bold uppercase py-1 px-4 w-40"
-            value={sortOrder}
-            onChange={(e) => setSortOrder(e.target.value as any)}
-          >
-            <option value="recent">RECENT FIRST</option>
-            <option value="oldest">OLDEST FIRST</option>
-          </select>
-        </div>
+            <div className="flex items-center gap-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)]">From</label>
+              <input 
+                type="date" 
+                className="input h-8 py-0 px-2 text-[11px] font-bold"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+            </div>
+            <div className="flex items-center gap-2 ml-4">
+              <label className="text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)]">To</label>
+              <input 
+                type="date" 
+                className="input h-8 py-0 px-2 text-[11px] font-bold"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
+            </div>
+            <button 
+              onClick={() => {
+                setStartDate('');
+                setEndDate('');
+                setDateFilter('all');
+              }}
+              className="ml-auto p-1.5 hover:bg-rose-500/10 hover:text-rose-500 rounded-lg transition-all"
+            >
+              <X size={14} />
+            </button>
+          </motion.div>
+        )}
       </div>
 
       <div className="card overflow-hidden border-[var(--border-color)]">

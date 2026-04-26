@@ -42,28 +42,37 @@ const InvoiceView = () => {
   if (!invoice || !client) return <div>Invoice not found</div>;
 
   const markAsPaid = async () => {
-    if (!user) return;
+    if (!user || !invoice) return;
     try {
-      // 1. Update invoice status
-      await updateDoc(doc(db, 'invoices', invoice.id), { status: 'paid', updatedAt: Timestamp.now() });
+      const alreadyPaid = invoice.advancePaid || 0;
+      const remainingBalance = invoice.amount - alreadyPaid;
 
-      // 2. Add to ledger (Calculated in INR)
-      const amountInInr = invoice.currency === 'USD' ? invoice.amount * settings.usdToInrRate : invoice.amount;
-      const ledgerRef = doc(collection(db, 'ledger'));
-      await setDoc(ledgerRef, {
-        type: 'income',
-        amount: amountInInr,
-        originalAmount: invoice.amount,
-        originalCurrency: invoice.currency,
-        description: `Payment for Invoice #${invoice.invoiceNumber}`,
-        category: 'Invoice Payment',
-        date: Timestamp.now(),
-        invoiceId: invoice.id,
-        ownerId: user.uid,
-        createdAt: Timestamp.now()
+      if (remainingBalance > 0) {
+        // 1. Record the remaining payment in ledger
+        const amountInInr = invoice.currency === 'USD' ? remainingBalance * settings.usdToInrRate : remainingBalance;
+        const ledgerRef = doc(collection(db, 'ledger'));
+        await setDoc(ledgerRef, {
+          type: 'income',
+          amount: amountInInr,
+          originalAmount: remainingBalance,
+          originalCurrency: invoice.currency,
+          description: `Final Payment for Invoice #${invoice.invoiceNumber}`,
+          category: 'Invoice Payment',
+          date: Timestamp.now(),
+          invoiceId: invoice.id,
+          ownerId: user.uid,
+          createdAt: Timestamp.now()
+        });
+      }
+
+      // 2. Update invoice status and advancePaid
+      await updateDoc(doc(db, 'invoices', invoice.id), { 
+        status: 'paid', 
+        advancePaid: invoice.amount,
+        updatedAt: Timestamp.now() 
       });
 
-      alert('Invoice marked as paid and added to ledger.');
+      alert('Invoice marked as fully paid and balance added to ledger.');
     } catch (error) {
       console.error("Error marking as paid", error);
     }
@@ -189,10 +198,16 @@ const InvoiceView = () => {
                 <span className="text-[10px] font-black uppercase tracking-widest">SUBTOTAL</span>
                 <span className="text-xs font-black tabular-nums">{formatCurrency(invoice.amount, invoice.currency)}</span>
               </div>
+              {invoice.advancePaid > 0 && (
+                <div className="flex justify-between items-center text-emerald-600 py-1">
+                  <span className="text-[10px] font-black uppercase tracking-widest">ADVANCE PAID</span>
+                  <span className="text-xs font-black tabular-nums">- {formatCurrency(invoice.advancePaid, invoice.currency)}</span>
+                </div>
+              )}
               <div className="flex justify-between items-baseline text-slate-900 bg-slate-900 text-white p-3 rounded-lg overflow-hidden relative">
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] relative z-10">TOTAL DUE</span>
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] relative z-10">BALANCE DUE</span>
                 <span className="text-2xl font-black tabular-nums relative z-10 tracking-tighter">
-                  {formatCurrency(invoice.amount, invoice.currency)}
+                  {formatCurrency(invoice.amount - (invoice.advancePaid || 0), invoice.currency)}
                 </span>
                 <div className="absolute top-0 right-0 w-24 h-full bg-blue-600 -skew-x-[20deg] translate-x-12"></div>
               </div>

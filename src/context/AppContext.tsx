@@ -326,6 +326,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     bulkDelete
   };
 
+  useEffect(() => {
+    const titles: Record<string, string> = {
+      '/': 'Dashboard | KWORKS',
+      '/tasks': 'Tasks | KWORKS',
+      '/clients': 'Clients | KWORKS',
+      '/invoices': 'Invoices | KWORKS',
+      '/ledger': 'Ledger | KWORKS',
+      '/settings': 'Settings | KWORKS',
+    };
+    
+    const path = window.location.pathname;
+    document.title = titles[path] || 'KWORKS – Freelancer Manager';
+  }, [window.location.pathname]);
+
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };
 

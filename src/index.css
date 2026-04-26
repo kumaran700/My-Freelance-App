@@ -2,7 +2,7 @@
 @import "tailwindcss";
 
 :root {
-  --font-sans: "Inter", "Segoe UI", "Noto Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", "Segoe UI", "Noto Sans", Arial, ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   
   /* Theme Variables */

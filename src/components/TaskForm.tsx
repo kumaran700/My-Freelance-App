@@ -147,11 +147,18 @@ const TaskForm = () => {
   };
 
   const handleRoundOffChange = (val: number) => {
-    setFormData({
-      ...formData,
-      roundOff: val,
-      amount: calculateTotal(formData.checklist, val)
-    });
+    if (formData.checklist.length > 0) {
+      setFormData({
+        ...formData,
+        roundOff: val,
+        amount: calculateTotal(formData.checklist, val)
+      });
+    } else {
+      setFormData({
+        ...formData,
+        roundOff: val
+      });
+    }
   };
 
   return (
@@ -232,12 +239,12 @@ const TaskForm = () => {
           {isAdmin && (
             <div className="grid grid-cols-3 gap-3">
               <div className="col-span-2 space-y-1">
-                <label className="label-caps">Amount {formData.checklist.length > 0 && '(Auto-calculated)'}</label>
+                <label className="label-caps">Amount {formData.checklist.length > 0 && '(Auto-adjustable)'}</label>
                 <input
                   type="number"
                   step="0.01"
-                  readOnly={formData.checklist.length > 0}
                   className={`input font-bold h-9 py-1 text-xs ${formData.checklist.length > 0 ? 'bg-[var(--bg-main)] cursor-not-allowed opacity-70' : ''}`}
+                  readOnly={formData.checklist.length > 0}
                   value={formData.amount}
                   onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) || 0 })}
                 />

@@ -24,7 +24,7 @@ import { generateStatementPDF } from '../lib/pdfGenerator';
 import { formatCurrency, convertToINR } from '../lib/formatters';
 
 const Dashboard = () => {
-  const { clients, tasks, invoices, ledger, settings, profile, toggleTheme } = useAppContext();
+  const { user, clients, tasks, invoices, ledger, settings, profile, toggleTheme } = useAppContext();
   const navigate = useNavigate();
   const [viewMonth, setViewMonth] = React.useState(new Date().getMonth());
   const [viewYear, setViewYear] = React.useState(new Date().getFullYear());
@@ -54,7 +54,10 @@ const Dashboard = () => {
   // Revised calculations with currency conversion
   const invoicedPending = filteredInvoices
     .filter(i => i.status !== 'paid')
-    .reduce((s, i) => s + convertToINR(i.amount, i.currency, settings.usdToInrRate), 0);
+    .reduce((s, i) => {
+      const balance = i.amount - (i.advancePaid || 0);
+      return s + convertToINR(balance, i.currency, settings.usdToInrRate);
+    }, 0);
 
   const revenuePaid = filteredInvoices
     .filter(i => i.status === 'paid')
@@ -84,8 +87,8 @@ const Dashboard = () => {
   const stats = isAdmin ? [
     { name: 'Monthly Projects', value: filteredTasks.length, icon: CheckSquare, color: 'text-[var(--primary)]', note: `${activeTasks.length} PENDING`, path: '/tasks', bg: 'bg-blue-500/10' },
     { name: 'Pending Income', value: formatCurrency(invoicedPending, 'INR'), icon: FileText, color: 'text-[var(--pending)]', note: null, path: '/invoices', bg: 'bg-amber-500/10' },
-    { name: 'Ledger Income', value: formatCurrency(monthlyIncome, 'INR'), icon: Landmark, color: 'text-[var(--income)]', note: null, path: '/ledger', bg: 'bg-emerald-500/10' },
-    { name: 'Total Revenue', value: formatCurrency(totalInvoiced, 'INR'), icon: TrendingUp, color: 'text-[var(--income)]', note: null, path: '/invoices', bg: 'bg-emerald-500/10' },
+    { name: 'Monthly Revenue', value: formatCurrency(monthlyIncome, 'INR'), icon: TrendingUp, color: 'text-[var(--income)]', note: null, path: '/ledger', bg: 'bg-emerald-500/10' },
+    { name: 'Total Invoiced', value: formatCurrency(totalInvoiced, 'INR'), icon: FileText, color: 'text-[var(--text-secondary)]', note: null, path: '/invoices', bg: 'bg-slate-500/10' },
   ] : [
     { name: 'Filtered Tasks', value: filteredTasks.length, icon: CheckSquare, color: 'text-[var(--primary)]', note: `${activeTasks.length} TODO`, path: '/tasks', bg: 'bg-blue-500/10' },
     { name: 'Invoiced', value: filteredTasks.filter(t => t.status === 'invoiced').length, icon: FileText, color: 'text-[var(--primary)]', note: 'Invoiced tasks', path: '/tasks', bg: 'bg-blue-500/10' },
@@ -265,7 +268,7 @@ const Dashboard = () => {
             </div>
             <div className="p-5 border-t border-[var(--divider-color)] bg-[var(--bg-main)]/30 mt-auto">
               <button 
-                onClick={() => generateStatementPDF(ledger, profile?.displayName || 'KARTHICK KUMARAN M')}
+                onClick={() => generateStatementPDF(ledger)}
                 className="btn-secondary w-full justify-center text-[11px] py-2.5 h-fit"
               >
                 Export Ledger Statement

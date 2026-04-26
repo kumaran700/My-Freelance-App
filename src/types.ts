@@ -41,13 +41,15 @@ export interface Invoice {
   taskIds: string[];
   invoiceNumber: string;
   amount: number;
+  advancePaid?: number;
   currency: Currency;
-  status: 'draft' | 'sent' | 'paid' | 'overdue' | 'archived';
+  status: 'draft' | 'sent' | 'paid' | 'overdue' | 'archived' | 'partially_paid';
   dueDate?: any;
   reminderDate?: any;
   ownerId: string;
   createdAt: any;
   updatedAt: any;
+  roundOff?: number;
 }
 
 export interface LedgerEntry {
