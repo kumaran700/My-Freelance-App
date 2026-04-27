@@ -9,12 +9,34 @@ import { formatDistanceToNow } from 'date-fns';
 const Layout = () => {
   const { user, profile, settings, notifications, markNotificationAsRead, deleteNotification, setSidebarOpen } = useAppContext();
   const [showNotifications, setShowNotifications] = useState(false);
+  const [activeToast, setActiveToast] = useState<any>(null);
+  const lastNotificationId = useRef<string | null>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
 
   const isAdmin = profile?.role === 'admin';
   const unreadCount = notifications.filter(n => !n.read).length;
+
+  // New Notification Toast logic
+  useEffect(() => {
+    const unread = notifications.filter(n => !n.read);
+    const newest = unread[0];
+    
+    if (newest && newest.id !== lastNotificationId.current) {
+      // Check if it's actually new (created in the last 10 seconds)
+      const now = new Date().getTime();
+      const createdAt = newest.createdAt.toDate ? newest.createdAt.toDate().getTime() : new Date(newest.createdAt).getTime();
+      
+      if (now - createdAt < 10000) {
+        setActiveToast(newest);
+        // Clear toast after 5 seconds
+        const timer = setTimeout(() => setActiveToast(null), 5000);
+        lastNotificationId.current = newest.id;
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [notifications]);
 
   const mobileNavLinks = [
     { name: 'Home', path: '/', icon: LayoutDashboard, role: 'any' },
@@ -180,6 +202,43 @@ const Layout = () => {
                </div>
             </div>
           </header>
+          
+          {/* Toast Notification Popup */}
+          <AnimatePresence>
+            {activeToast && (
+              <motion.div
+                initial={{ y: -100, opacity: 0 }}
+                animate={{ y: 20, opacity: 1 }}
+                exit={{ y: -100, opacity: 0 }}
+                className="fixed top-0 left-0 right-0 z-[100] flex justify-center px-4"
+                onClick={() => {
+                  handleNotificationClick(activeToast);
+                  setActiveToast(null);
+                }}
+              >
+                <div className="bg-[var(--card-bg)] border border-[var(--border-color)] px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 max-w-sm w-full cursor-pointer group active:scale-95 transition-transform">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                    activeToast.type === 'task' ? 'bg-blue-500/10 text-blue-500' :
+                    activeToast.type === 'invoice' ? 'bg-emerald-500/10 text-emerald-500' :
+                    'bg-[var(--primary)]/10 text-[var(--primary)]'
+                  }`}>
+                    {activeToast.type === 'task' ? <CheckSquare size={20} /> : activeToast.type === 'invoice' ? <FileText size={20} /> : <Bell size={20} />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-[var(--text-heading)] line-clamp-1">{activeToast.title}</h4>
+                    <p className="text-[12px] text-[var(--text-secondary)] font-medium leading-tight line-clamp-2 mt-0.5 uppercase">{activeToast.message}</p>
+                  </div>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); setActiveToast(null); }}
+                    className="p-1 hover:bg-[var(--bg-main)] rounded-lg text-[var(--text-muted)]"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           <main className="flex-1 p-4 lg:p-8 overflow-y-auto mb-16 lg:mb-0 pb-[env(safe-area-inset-bottom)]">
             <div className="max-w-7xl mx-auto w-full">
               <Outlet />

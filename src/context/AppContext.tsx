@@ -3,6 +3,27 @@ import { onAuthStateChanged, signInAnonymously, User, signOut } from 'firebase/a
 import { auth, db, onSnapshot, collection, query, where, orderBy, doc, getDoc, setDoc, updateDoc, deleteDoc, Timestamp } from '../lib/firebase';
 import { Client, Task, Invoice, LedgerEntry, AppSettings, UserProfile, Notification } from '../types';
 
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+  }
+}
+
 interface AppContextType {
   user: User | null;
   profile: UserProfile | null;
@@ -58,6 +79,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : [];
   });
   const [isSidebarOpen, setSidebarOpen] = useState(false);
+
+  const handleFirestoreError = (error: unknown, operationType: OperationType, path: string | null) => {
+    const errInfo: FirestoreErrorInfo = {
+      error: error instanceof Error ? error.message : String(error),
+      authInfo: {
+        userId: auth.currentUser?.uid,
+        email: auth.currentUser?.email,
+        emailVerified: auth.currentUser?.emailVerified,
+        isAnonymous: auth.currentUser?.isAnonymous,
+      },
+      operationType,
+      path
+    };
+    console.error('Firestore Error: ', JSON.stringify(errInfo));
+  };
+
   const [settings, setSettingsState] = useState<AppSettings>(() => {
     const saved = localStorage.getItem('kworks_settings');
     return saved ? JSON.parse(saved) : { usdToInrRate: 83, theme: 'light', lastRateUpdate: '' };
@@ -198,22 +235,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as Client));
           setClients(data);
           localStorage.setItem('kworks_clients', JSON.stringify(data));
-        }),
+        }, (error) => handleFirestoreError(error, OperationType.LIST, 'clients')),
         onSnapshot(qTasks, (snap) => {
           const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as Task));
           setTasks(data);
           localStorage.setItem('kworks_tasks', JSON.stringify(data));
-        }),
+        }, (error) => handleFirestoreError(error, OperationType.LIST, 'tasks')),
         onSnapshot(qInvoices, (snap) => {
           const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as Invoice)).filter(i => i.status !== 'archived');
           setInvoices(data);
           localStorage.setItem('kworks_invoices', JSON.stringify(data));
-        }),
+        }, (error) => handleFirestoreError(error, OperationType.LIST, 'invoices')),
         onSnapshot(qLedger, (snap) => {
           const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as LedgerEntry));
           setLedger(data);
           localStorage.setItem('kworks_ledger', JSON.stringify(data));
-        })
+        }, (error) => handleFirestoreError(error, OperationType.LIST, 'ledger'))
       );
     } else if (profile?.role === 'manager') {
       // Manager sees all tasks and clients
@@ -224,12 +261,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as Task));
           setTasks(data);
           localStorage.setItem('kworks_tasks', JSON.stringify(data));
-        }),
+        }, (error) => handleFirestoreError(error, OperationType.LIST, 'tasks')),
         onSnapshot(qClients, (snap) => {
           const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as Client));
           setClients(data);
           localStorage.setItem('kworks_clients', JSON.stringify(data));
-        })
+        }, (error) => handleFirestoreError(error, OperationType.LIST, 'clients'))
       );
     }
 
@@ -245,7 +282,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as Notification));
         setNotifications(data);
         localStorage.setItem('kworks_notifications', JSON.stringify(data));
-      })
+      }, (error) => handleFirestoreError(error, OperationType.LIST, 'notifications'))
     );
 
     return () => unsubs.forEach(u => u());

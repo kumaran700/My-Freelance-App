@@ -11,8 +11,12 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function getProfile(uid) {
+      return get(/databases/$(database)/documents/profiles/$(uid)).data;
+    }
+
     function getRole() {
-      return get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role;
+      return getProfile(request.auth.uid).get('role', 'none');
     }
 
     function isAdmin() {
@@ -48,7 +52,7 @@ service cloud.firestore {
     // --- Profiles ---
     match /profiles/{uid} {
       allow get: if isSignedIn();
-      allow list: if isSignedIn();
+      allow list: if isSignedIn(); // Allow listing profiles for notification selection
       allow create: if isSignedIn() && request.auth.uid == uid && incoming().role in ['admin', 'manager'];
       allow update: if isSignedIn() && request.auth.uid == uid && (existing().role == 'admin' || incoming().role == existing().role);
     }
