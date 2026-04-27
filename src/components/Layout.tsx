@@ -1,18 +1,30 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { useAppContext } from '../context/AppContext';
-import { Bell, X, Check, Trash2, ExternalLink, Send } from 'lucide-react';
+import { Bell, X, Check, Trash2, ExternalLink, Send, LayoutDashboard, CheckSquare, Users, FileText, Landmark, Menu } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatDistanceToNow } from 'date-fns';
 
 const Layout = () => {
-  const { user, profile, settings, notifications, markNotificationAsRead, deleteNotification } = useAppContext();
+  const { user, profile, settings, notifications, markNotificationAsRead, deleteNotification, setSidebarOpen } = useAppContext();
   const [showNotifications, setShowNotifications] = useState(false);
   const notificationRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const location = useLocation();
 
+  const isAdmin = profile?.role === 'admin';
   const unreadCount = notifications.filter(n => !n.read).length;
+
+  const mobileNavLinks = [
+    { name: 'Home', path: '/', icon: LayoutDashboard, role: 'any' },
+    { name: 'Tasks', path: '/tasks', icon: CheckSquare, role: 'any' },
+    { name: 'Clients', path: '/clients', icon: Users, role: 'any' },
+    ...(isAdmin ? [
+      { name: 'Ledger', path: '/ledger', icon: Landmark, role: 'admin' }
+    ] : []),
+    { name: 'Menu', path: '#menu', icon: Menu, role: 'any' }
+  ];
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -32,15 +44,26 @@ const Layout = () => {
     }
   };
 
+  const handleMobileNavClick = (path: string, e: React.MouseEvent) => {
+    if (path === '#menu') {
+      e.preventDefault();
+      setSidebarOpen(true);
+    }
+  };
+
   return (
     <div className={`flex h-screen overflow-hidden ${settings.theme === 'dark' ? 'dark' : ''}`}>
-      <div className="flex h-full w-full bg-main text-primary font-sans overflow-hidden bg-[var(--bg-main)] text-[var(--text-primary)]">
+      <div className="flex h-full w-full bg-main text-primary font-sans overflow-hidden bg-[var(--bg-main)] text-[var(--text-primary)] pb-[env(safe-area-inset-bottom)]">
         <Sidebar />
-        <div className="flex-1 flex flex-col min-w-0 h-screen transition-all duration-300">
-          <header className="h-16 bg-[var(--bg-secondary)] border-b border-[var(--border-color)] flex items-center justify-between px-4 lg:px-8 z-20 shrink-0 shadow-sm">
-            <div className="flex items-center space-x-4 pl-12 lg:pl-0">
-              <p className="font-black uppercase tracking-widest text-[10px] text-[var(--text-muted)]">
-                {profile?.role === 'admin' ? 'DASHBOARD • ADMIN' : 'DASHBOARD • MANAGER'}
+        <div className="flex-1 flex flex-col min-w-0 h-screen transition-all duration-300 relative">
+          <header className="h-16 bg-[var(--bg-secondary)] border-b border-[var(--border-color)] flex items-center justify-between px-4 lg:px-8 z-20 shrink-0 shadow-sm pt-[env(safe-area-inset-top)] box-content">
+            <div className="flex items-center space-x-2 pl-0">
+              {/* Profile Link or Burger */}
+               <div className="w-8 h-8 rounded-full bg-[var(--primary)] text-white flex items-center justify-center text-[10px] font-black tracking-tighter shadow-lg shadow-blue-500/20 lg:hidden">
+                  {profile?.displayName ? profile.displayName.split(' ').map(n => n[0]).join('').slice(0, 2) : 'KW'}
+               </div>
+              <p className="font-black uppercase tracking-widest text-[10px] text-[var(--text-muted)] lg:pl-0">
+                {profile?.role === 'admin' ? 'KWORKS • PRO' : 'KWORKS • TASK'}
               </p>
             </div>
             <div className="flex items-center space-x-4">
@@ -157,11 +180,37 @@ const Layout = () => {
                </div>
             </div>
           </header>
-          <main className="flex-1 p-4 lg:p-8 overflow-y-auto">
+          <main className="flex-1 p-4 lg:p-8 overflow-y-auto mb-16 lg:mb-0 pb-[env(safe-area-inset-bottom)]">
             <div className="max-w-7xl mx-auto w-full">
               <Outlet />
             </div>
           </main>
+
+          {/* iOS Style Bottom Tab Bar */}
+          <nav className="lg:hidden fixed bottom-0 left-0 right-0 h-16 bg-[var(--bg-secondary)] border-t border-[var(--border-color)] flex items-center justify-around px-2 z-40 shadow-[0_-4px_12px_rgba(0,0,0,0.05)] pb-[env(safe-area-inset-bottom)] box-content">
+            {mobileNavLinks.map((link) => {
+              const Icon = link.icon;
+              const isActive = location.pathname === link.path;
+              return (
+                <Link
+                  key={link.path}
+                  to={link.path}
+                  onClick={(e) => handleMobileNavClick(link.path, e)}
+                  className={`flex flex-col items-center justify-center w-full h-full space-y-1 transition-all ${
+                    isActive ? 'text-[var(--primary)]' : 'text-[var(--text-muted)]'
+                  }`}
+                >
+                  <div className={`relative p-1 rounded-xl transition-all ${isActive ? 'bg-[var(--primary)]/10' : ''}`}>
+                    <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
+                    {link.name === 'Broadcast' && unreadCount > 0 && (
+                      <span className="absolute -top-1 -right-1 w-2 h-2 bg-rose-500 rounded-full border-2 border-[var(--bg-secondary)]" />
+                    )}
+                  </div>
+                  <span className="text-[9px] font-black uppercase tracking-tight">{link.name}</span>
+                </Link>
+              );
+            })}
+          </nav>
         </div>
       </div>
     </div>

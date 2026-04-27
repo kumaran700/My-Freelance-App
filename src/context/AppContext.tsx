@@ -22,6 +22,8 @@ interface AppContextType {
   markNotificationAsRead: (id: string) => Promise<void>;
   deleteNotification: (id: string) => Promise<void>;
   addInAppNotification: (userId: string, title: string, message: string, type: Notification['type'], link?: string) => Promise<void>;
+  isSidebarOpen: boolean;
+  setSidebarOpen: (o: boolean) => void;
   toggleTheme: () => void;
   refreshRates: () => Promise<void>;
   loginWithPassword: (password: string) => Promise<boolean>;
@@ -55,6 +57,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const saved = localStorage.getItem('kworks_notifications');
     return saved ? JSON.parse(saved) : [];
   });
+  const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [settings, setSettingsState] = useState<AppSettings>(() => {
     const saved = localStorage.getItem('kworks_settings');
     return saved ? JSON.parse(saved) : { usdToInrRate: 83, theme: 'light', lastRateUpdate: '' };
@@ -383,7 +386,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     bulkDelete,
     markNotificationAsRead,
     deleteNotification,
-    addInAppNotification
+    addInAppNotification,
+    isSidebarOpen,
+    setSidebarOpen
   };
 
   useEffect(() => {

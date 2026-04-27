@@ -6,9 +6,8 @@ import { formatCurrency, convertToINR } from '../lib/formatters';
 import { format } from 'date-fns';
 
 const Sidebar = () => {
-  const { settings, toggleTheme, refreshRates, ledger, invoices, profile, logout } = useAppContext();
+  const { settings, toggleTheme, refreshRates, ledger, invoices, profile, logout, isSidebarOpen, setSidebarOpen } = useAppContext();
   const location = useLocation();
-  const [isOpen, setIsOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const isAdmin = profile?.role === 'admin';
@@ -58,7 +57,7 @@ const Sidebar = () => {
             <Link
               key={link.path}
               to={link.path}
-              onClick={() => setIsOpen(false)}
+              onClick={() => setSidebarOpen(false)}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-xs font-bold uppercase tracking-widest ${
                 isActive 
                   ? 'bg-[var(--primary)] text-white shadow-lg' 
@@ -120,31 +119,23 @@ const Sidebar = () => {
 
   return (
     <>
-      {/* Mobile Toggle */}
-      <div className="lg:hidden fixed top-4 left-4 z-50">
-        <button 
-          onClick={() => setIsOpen(!isOpen)}
-          className="p-2 bg-slate-800 text-white rounded-lg shadow-lg border border-slate-700"
-        >
-          {isOpen ? <X size={20} /> : <Menu size={20} />}
-        </button>
-      </div>
-
+      {/* Mobile Toggle - Hidden now because we use header/nav */}
+      
       {/* Desktop Sidebar */}
       <aside className="hidden lg:flex w-64 h-screen bg-[var(--bg-secondary)] flex-shrink-0 flex-col sticky top-0 border-r border-[var(--border-color)]">
         <SidebarContent />
       </aside>
 
       {/* Mobile Sidebar Overlay */}
-      {isOpen && (
+      {isSidebarOpen && (
         <div 
           className="lg:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
-          onClick={() => setIsOpen(false)}
+          onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Mobile Sidebar */}
-      <aside className={`lg:hidden fixed top-0 left-0 z-40 h-screen w-64 bg-[var(--bg-secondary)] flex flex-col border-r border-[var(--border-color)] transition-transform duration-300 transform ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`lg:hidden fixed top-0 left-0 z-40 h-screen w-64 bg-[var(--bg-secondary)] flex flex-col border-r border-[var(--border-color)] transition-transform duration-300 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <SidebarContent />
       </aside>
     </>
