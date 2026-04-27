@@ -5,6 +5,7 @@ export interface Client {
   name: string;
   email?: string;
   phone?: string;
+  address?: string;
   company?: string;
   ownerId: string;
   createdAt: any;
@@ -70,6 +71,17 @@ export interface AppSettings {
   usdToInrRate: number;
   theme: 'light' | 'dark';
   lastRateUpdate?: string;
+}
+
+export interface Notification {
+  id: string;
+  userId: string;
+  title: string;
+  message: string;
+  type: 'task' | 'invoice' | 'system';
+  read: boolean;
+  createdAt: any;
+  link?: string;
 }
 
 export interface UserProfile {

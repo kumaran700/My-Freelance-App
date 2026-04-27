@@ -17,13 +17,14 @@ import {
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { format } from 'date-fns';
-import { db, doc, deleteDoc, updateDoc } from '../lib/firebase';
+import { db, doc, deleteDoc, updateDoc, collection, query, where, getDocs } from '../lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
+import { Bell } from 'lucide-react';
 
 import { formatCurrency } from '../lib/formatters';
 
 const TaskList = () => {
-  const { tasks, clients, profile, deleteTask, bulkDelete } = useAppContext();
+  const { tasks, clients, profile, deleteTask, bulkDelete, addInAppNotification } = useAppContext();
   const isAdmin = profile?.role === 'admin';
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
@@ -52,6 +53,33 @@ const TaskList = () => {
   const handleBulkDelete = async () => {
     await bulkDelete('tasks', selectedIds);
     setSelectedIds([]);
+  };
+
+  const handleTaskReminder = async (task: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!profile) return;
+
+    try {
+      const targetRole = profile.role === 'admin' ? 'manager' : 'admin';
+      const q = query(collection(db, 'profiles'), where('role', '==', targetRole));
+      const snapshot = await getDocs(q);
+      
+      const client = clients.find(c => c.id === task.clientId);
+      const clientName = client?.name || 'Unknown Client';
+
+      snapshot.forEach(profileDoc => {
+        addInAppNotification(
+          profileDoc.id,
+          'Task Reminder',
+          `${profile.displayName} sent a reminder for task: ${task.title} (Client: ${clientName})`,
+          'task',
+          `/tasks/edit/${task.id}`
+        );
+      });
+      alert('Reminder sent successfully!');
+    } catch (error) {
+      console.error("Error sending task reminder", error);
+    }
   };
 
   const toggleChecklist = async (taskId: string, index: number) => {
@@ -163,6 +191,15 @@ const TaskList = () => {
                     )}
                   </div>
                   <div className="flex items-center gap-1">
+                    {task.status !== 'completed' && task.status !== 'invoiced' && (
+                      <button 
+                        onClick={(e) => handleTaskReminder(task, e)}
+                        className="p-1.5 text-[var(--text-muted)] hover:text-amber-500 transition-colors"
+                        title="Send Reminder to Team"
+                      >
+                        <Bell size={14} />
+                      </button>
+                    )}
                     <button onClick={() => navigate(`/tasks/edit/${task.id}`)} className="p-1.5 text-[var(--text-muted)] hover:text-[var(--primary)] transition-colors">
                       <Edit size={14} />
                     </button>

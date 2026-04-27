@@ -5,6 +5,7 @@ import {
   Mail, 
   Phone, 
   Building2, 
+  MapPin,
   Plus, 
   CheckSquare, 
   FileText,
@@ -78,6 +79,12 @@ const ClientDetails = () => {
                   <div className="flex items-center gap-1 text-[10px] text-zinc-400 font-bold uppercase">
                     <Phone size={12} />
                     <span>{client.phone}</span>
+                  </div>
+                )}
+                {client.address && (
+                  <div className="flex items-center gap-1 text-[10px] text-zinc-400 font-bold uppercase">
+                    <MapPin size={12} />
+                    <span className="truncate max-w-[150px]">{client.address}</span>
                   </div>
                 )}
               </div>

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, signInAnonymously, User, signOut } from 'firebase/auth';
-import { auth, db, onSnapshot, collection, query, where, orderBy, doc, getDoc, setDoc, updateDoc, deleteDoc } from '../lib/firebase';
-import { Client, Task, Invoice, LedgerEntry, AppSettings, UserProfile } from '../types';
+import { auth, db, onSnapshot, collection, query, where, orderBy, doc, getDoc, setDoc, updateDoc, deleteDoc, Timestamp } from '../lib/firebase';
+import { Client, Task, Invoice, LedgerEntry, AppSettings, UserProfile, Notification } from '../types';
 
 interface AppContextType {
   user: User | null;
@@ -11,6 +11,7 @@ interface AppContextType {
   tasks: Task[];
   invoices: Invoice[];
   ledger: LedgerEntry[];
+  notifications: Notification[];
   settings: AppSettings;
   setSettings: (s: AppSettings) => void;
   deleteClient: (id: string) => Promise<void>;
@@ -18,6 +19,9 @@ interface AppContextType {
   deleteInvoice: (id: string) => Promise<void>;
   deleteLedgerEntry: (id: string) => Promise<void>;
   bulkDelete: (type: 'clients' | 'tasks' | 'invoices' | 'ledger', ids: string[]) => Promise<void>;
+  markNotificationAsRead: (id: string) => Promise<void>;
+  deleteNotification: (id: string) => Promise<void>;
+  addInAppNotification: (userId: string, title: string, message: string, type: Notification['type'], link?: string) => Promise<void>;
   toggleTheme: () => void;
   refreshRates: () => Promise<void>;
   loginWithPassword: (password: string) => Promise<boolean>;
@@ -45,6 +49,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
   const [ledger, setLedger] = useState<LedgerEntry[]>(() => {
     const saved = localStorage.getItem('kworks_ledger');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [notifications, setNotifications] = useState<Notification[]>(() => {
+    const saved = localStorage.getItem('kworks_notifications');
     return saved ? JSON.parse(saved) : [];
   });
   const [settings, setSettingsState] = useState<AppSettings>(() => {
@@ -222,6 +230,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       );
     }
 
+    // Notifications listener
+    const qNotifications = query(
+      collection(db, 'notifications'), 
+      where('userId', '==', user.uid),
+      orderBy('createdAt', 'desc')
+    );
+    
+    unsubs.push(
+      onSnapshot(qNotifications, (snap) => {
+        const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as Notification));
+        setNotifications(data);
+        localStorage.setItem('kworks_notifications', JSON.stringify(data));
+      })
+    );
+
     return () => unsubs.forEach(u => u());
   }, [user, profile]);
 
@@ -304,6 +327,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const markNotificationAsRead = async (id: string) => {
+    try {
+      await updateDoc(doc(db, 'notifications', id), { read: true });
+    } catch (e) {
+      console.error("Mark notification as read failed", e);
+    }
+  };
+
+  const deleteNotification = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'notifications', id));
+    } catch (e) {
+      console.error("Delete notification failed", e);
+    }
+  };
+
+  const addInAppNotification = async (userId: string, title: string, message: string, type: Notification['type'], link?: string) => {
+    try {
+      const newRef = doc(collection(db, 'notifications'));
+      await setDoc(newRef, {
+        userId,
+        title,
+        message,
+        type,
+        read: false,
+        createdAt: Timestamp.now(),
+        link: link || null
+      });
+    } catch (e) {
+      console.error("Add notification failed", e);
+    }
+  };
+
   const value = {
     user,
     profile,
@@ -312,6 +368,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     tasks,
     invoices,
     ledger,
+    notifications,
     settings,
     setSettings,
     toggleTheme,
@@ -323,7 +380,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     deleteTask,
     deleteInvoice,
     deleteLedgerEntry,
-    bulkDelete
+    bulkDelete,
+    markNotificationAsRead,
+    deleteNotification,
+    addInAppNotification
   };
 
   useEffect(() => {

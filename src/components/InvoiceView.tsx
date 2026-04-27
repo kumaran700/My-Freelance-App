@@ -125,10 +125,20 @@ const InvoiceView = () => {
               <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">BILL TO</h3>
               <div className="space-y-0.5">
                 <p className="text-lg font-black uppercase leading-tight">{client.name}</p>
-                {client.company && <p className="text-xs text-slate-600 font-black uppercase tracking-tight">{client.company}</p>}
-                <div className="pt-2 space-y-0.5">
-                  {client.email && <p className="text-[11px] text-slate-500 font-medium">{client.email}</p>}
-                  {client.phone && <p className="text-[11px] text-slate-500 font-medium">{client.phone}</p>}
+                {client.company && <p className="text-xs text-slate-600 font-black uppercase tracking-tight mb-2">{client.company}</p>}
+                
+                <div className="pt-2 space-y-1">
+                  {client.address && (
+                    <div className="flex items-start gap-1">
+                      <p className="text-[11px] text-slate-500 font-medium whitespace-pre-wrap max-w-[200px]">{client.address}</p>
+                    </div>
+                  )}
+                  {client.phone && (
+                    <p className="text-[11px] text-slate-500 font-medium">{client.phone}</p>
+                  )}
+                  {client.email && (
+                    <p className="text-[11px] text-slate-500 font-medium">{client.email}</p>
+                  )}
                 </div>
               </div>
             </div>

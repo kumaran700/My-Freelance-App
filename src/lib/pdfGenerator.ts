@@ -43,7 +43,13 @@ export const downloadInvoicePDF = (invoice: Invoice, client: Client, tasks: Task
         <div>
           <div style="font-size: 12px; color: #6b7280; font-weight: 600;">BILL TO</div>
           <div style="font-size: 18px; font-weight: 600; margin-top: 5px;">${client.name.toUpperCase()}</div>
-          ${client.phone ? `<div style="font-size: 12px; color: #6b7280;">${client.phone}</div>` : ''}
+          ${client.company ? `<div style="font-size: 12px; color: #111827; font-weight: 600; margin-top: 2px;">${client.company.toUpperCase()}</div>` : ''}
+          
+          <div style="margin-top: 10px; line-height: 1.4;">
+            ${client.address ? `<div style="font-size: 11px; color: #4b5563; max-width: 250px;">${client.address.replace(/\n/g, '<br>')}</div>` : ''}
+            ${client.phone ? `<div style="font-size: 11px; color: #4b5563;">${client.phone}</div>` : ''}
+            ${client.email ? `<div style="font-size: 11px; color: #4b5563;">${client.email}</div>` : ''}
+          </div>
         </div>
 
         <div style="text-align: right; font-size: 12px;">

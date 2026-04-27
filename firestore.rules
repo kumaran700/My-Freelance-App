@@ -47,7 +47,8 @@ service cloud.firestore {
 
     // --- Profiles ---
     match /profiles/{uid} {
-      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
       allow create: if isSignedIn() && request.auth.uid == uid && incoming().role in ['admin', 'manager'];
       allow update: if isSignedIn() && request.auth.uid == uid && (existing().role == 'admin' || incoming().role == existing().role);
     }
@@ -90,6 +91,14 @@ service cloud.firestore {
       allow list: if isAdmin();
       allow create: if isAdmin() && incoming().ownerId == request.auth.uid;
       allow update, delete: if isAdmin();
+    }
+
+    // --- Notifications ---
+    match /notifications/{id} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
   }
 }

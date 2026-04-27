@@ -13,17 +13,18 @@ import {
   Eye,
   Calendar,
   Download,
-  CheckSquare
+  CheckSquare,
+  Mail
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
-import { format } from 'date-fns';
+import { format, differenceInDays } from 'date-fns';
 import { db, doc, updateDoc, Timestamp, deleteDoc, setDoc, collection } from '../lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { downloadInvoicePDF } from '../lib/pdfGenerator';
 import { formatCurrency } from '../lib/formatters';
 
 const InvoiceList = () => {
-  const { user, invoices, clients, tasks, profile, settings, deleteInvoice, bulkDelete } = useAppContext();
+  const { user, invoices, clients, tasks, profile, settings, deleteInvoice, bulkDelete, addInAppNotification } = useAppContext();
   const isAdmin = profile?.role === 'admin';
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
@@ -54,6 +55,36 @@ const InvoiceList = () => {
   const handleBulkDelete = async () => {
     await bulkDelete('invoices', selectedIds);
     setSelectedIds([]);
+  };
+
+  const handleSendReminder = async (invoice: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const client = clients.find(c => c.id === invoice.clientId);
+    if (!client) return;
+
+    if (!client.email) {
+      alert(`Client ${client.name} does not have an email address configured.`);
+      return;
+    }
+
+    const dueDateStr = invoice.dueDate ? format(invoice.dueDate.toDate ? invoice.dueDate.toDate() : new Date(invoice.dueDate), 'MMM d, yyyy') : 'N/A';
+    const amountStr = formatCurrency(invoice.amount, invoice.currency);
+    
+    const subject = `Payment Reminder: Invoice #${invoice.invoiceNumber}`;
+    const body = `Hi ${client.name},\n\nThis is a friendly reminder regarding Invoice #${invoice.invoiceNumber} for ${amountStr}, which was due on ${dueDateStr}.\n\nIf you have already made the payment, please disregard this message. Otherwise, we would appreciate it if you could settle the balance at your earliest convenience.\n\nBest regards,\nKARTHICK KUMARAN M\nKWORKS`;
+
+    const mailtoUrl = `mailto:${client.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.location.href = mailtoUrl;
+
+    if (user) {
+      await addInAppNotification(
+        user.uid,
+        'Reminder Sent',
+        `Payment reminder triggered for #${invoice.invoiceNumber} to ${client.name}`,
+        'invoice',
+        `/invoices/${invoice.id}`
+      );
+    }
   };
 
   const updateInvoiceStatus = async (invoiceId: string, newStatus: string, e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -245,6 +276,15 @@ const InvoiceList = () => {
                       <span>{format(invoice.createdAt.toDate ? invoice.createdAt.toDate() : new Date(invoice.createdAt), 'MMM d, yyyy')}</span>
                     </div>
                     <div className="flex gap-1">
+                       {invoice.status !== 'paid' && (
+                         <button 
+                           onClick={(e) => handleSendReminder(invoice, e)}
+                           className="p-1.5 text-[var(--text-muted)] hover:text-blue-500 transition-colors"
+                           title="Send Reminder"
+                         >
+                           <Mail size={14}/>
+                         </button>
+                       )}
                        <button 
                          onClick={(e) => { 
                            e.stopPropagation(); 

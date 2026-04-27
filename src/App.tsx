@@ -18,6 +18,7 @@ import InvoiceForm from './components/InvoiceForm';
 import InvoiceView from './components/InvoiceView';
 import Ledger from './components/Ledger';
 import LedgerForm from './components/LedgerForm';
+import NotificationForm from './components/NotificationForm';
 import Settings from './components/Settings';
 import Login from './components/Login';
 
@@ -74,6 +75,8 @@ const AppRoutes = () => {
         <Route path="/tasks/new" element={<TaskForm />} />
         <Route path="/tasks/:id" element={<TaskForm />} />
         <Route path="/tasks/edit/:id" element={<TaskForm />} />
+        
+        <Route path="/notifications/send" element={<NotificationForm />} />
         
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

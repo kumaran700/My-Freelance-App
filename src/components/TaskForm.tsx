@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Plus, X, ArrowLeft, Save, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useAppContext } from '../context/AppContext';
-import { db, collection, doc, setDoc, updateDoc, Timestamp } from '../lib/firebase';
+import { db, collection, doc, setDoc, updateDoc, Timestamp, query, where, getDocs } from '../lib/firebase';
 
 import { formatCurrency } from '../lib/formatters';
 
@@ -12,7 +12,7 @@ const TaskForm = () => {
   const [searchParams] = useSearchParams();
   const preSelectedClientId = searchParams.get('clientId');
   
-  const { clients, tasks, user, profile } = useAppContext();
+  const { clients, tasks, user, profile, addInAppNotification } = useAppContext();
   const isAdmin = profile?.role === 'admin';
   const navigate = useNavigate();
 
@@ -94,6 +94,23 @@ const TaskForm = () => {
           ...taskData,
           createdAt: Timestamp.now()
         });
+
+        // Notify managers if admin created it, or admin if manager created it
+        if (profile) {
+          const targetRole = profile.role === 'admin' ? 'manager' : 'admin';
+          const q = query(collection(db, 'profiles'), where('role', '==', targetRole));
+          const snapshot = await getDocs(q);
+          
+          snapshot.forEach(profileDoc => {
+            addInAppNotification(
+              profileDoc.id,
+              'New Task Added',
+              `${profile.displayName} created task: ${formData.title}`,
+              'task',
+              '/tasks'
+            );
+          });
+        }
       }
       navigate('/tasks');
     } catch (error) {

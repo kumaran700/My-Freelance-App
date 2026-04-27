@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, CheckSquare, FileText, Landmark, LogOut, Sun, Moon, Settings as SettingsIcon, Menu, X, RefreshCw } from 'lucide-react';
+import { LayoutDashboard, Users, CheckSquare, FileText, Landmark, LogOut, Sun, Moon, Settings as SettingsIcon, Menu, X, RefreshCw, Bell } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { formatCurrency, convertToINR } from '../lib/formatters';
 import { format } from 'date-fns';
@@ -23,6 +23,7 @@ const Sidebar = () => {
     { name: 'Dashboard', path: '/', icon: LayoutDashboard, role: 'any' },
     { name: 'Tasks', path: '/tasks', icon: CheckSquare, role: 'any' },
     { name: 'Clients', path: '/clients', icon: Users, role: 'any' },
+    { name: 'Broadcast', path: '/notifications/send', icon: Bell, role: 'any' },
     { name: 'Invoices', path: '/invoices', icon: FileText, role: 'admin' },
     { name: 'Ledger', path: '/ledger', icon: Landmark, role: 'admin' },
     { name: 'Settings', path: '/settings', icon: SettingsIcon, role: 'admin' },

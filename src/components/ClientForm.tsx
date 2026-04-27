@@ -13,6 +13,7 @@ const ClientForm = () => {
     name: '',
     email: '',
     phone: '',
+    address: '',
     company: '',
   });
 
@@ -24,6 +25,7 @@ const ClientForm = () => {
           name: client.name,
           email: client.email || '',
           phone: client.phone || '',
+          address: client.address || '',
           company: client.company || '',
         });
       }
@@ -111,6 +113,16 @@ const ClientForm = () => {
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
               />
             </div>
+          </div>
+
+          <div className="space-y-1">
+            <label className="label-caps">Address</label>
+            <textarea
+              placeholder="Client's office or billing address..."
+              className="input font-medium min-h-[60px]"
+              value={formData.address}
+              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+            />
           </div>
 
           <div className="pt-2 flex gap-2">
