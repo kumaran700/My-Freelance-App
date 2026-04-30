@@ -1,13 +1,91 @@
-import React, { useState, useEffect } from 'react';
-import { Globe, Moon, Sun, ShieldCheck, KeyRound, Save } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Globe, Moon, Sun, ShieldCheck, KeyRound, Save, Download, Upload, Database, Loader2 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { db, doc, getDoc } from '../lib/firebase';
 
 const Settings = () => {
-  const { settings, setSettings, toggleTheme, updatePasswords, profile } = useAppContext();
+  const { 
+    settings, 
+    setSettings, 
+    toggleTheme, 
+    updatePasswords, 
+    profile,
+    clients,
+    tasks,
+    invoices,
+    ledger,
+    notifications,
+    restoreBackup
+  } = useAppContext();
   const [adminPass, setAdminPass] = useState('');
   const [managerPass, setManagerPass] = useState('');
   const [status, setStatus] = useState('');
+  const [backupStatus, setBackupStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleDownloadBackup = () => {
+    try {
+      const backupData = {
+        clients,
+        tasks,
+        invoices,
+        ledger,
+        notifications,
+        version: '1.0',
+        exportedAt: new Date().toISOString()
+      };
+
+      const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `kworks_backup_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("Backup failed", e);
+      setBackupStatus('error');
+    }
+  };
+
+  const handleRestoreClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!window.confirm('Restoring a backup will overwrite existing data with the same IDs. Are you sure you want to proceed?')) {
+      e.target.value = '';
+      return;
+    }
+
+    setBackupStatus('loading');
+    try {
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          const data = JSON.parse(event.target?.result as string);
+          await restoreBackup(data);
+          setBackupStatus('success');
+          setTimeout(() => setBackupStatus('idle'), 3000);
+          alert('Backup restored successfully! The app will refresh data.');
+        } catch (err) {
+          console.error("Parse failed", err);
+          setBackupStatus('error');
+          alert('Failed to parse backup file. Please ensure it is a valid KWorks JSON backup.');
+        }
+      };
+      reader.readAsText(file);
+    } catch (e) {
+      console.error("Restore failed", e);
+      setBackupStatus('error');
+    }
+    e.target.value = '';
+  };
 
   useEffect(() => {
     const fetchPass = async () => {
@@ -127,6 +205,52 @@ const Settings = () => {
             </button>
           </div>
         </section>
+
+        {profile?.role === 'admin' && (
+          <section className="space-y-4 pt-6 border-t border-[var(--border-color)]">
+            <div className="flex items-center gap-2 text-blue-500">
+              <Database size={16} />
+              <h3 className="font-black text-xs uppercase tracking-widest leading-none">DATA MANAGEMENT</h3>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-tight">BACKUP & RESTORE</p>
+                <p className="text-[9px] text-[var(--text-muted)] font-bold uppercase leading-relaxed">
+                  Download a full backup of all your clients, tasks, invoices, and ledger entries. 
+                  You can restore this data later if needed.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <button 
+                  onClick={handleDownloadBackup}
+                  className="flex items-center justify-center gap-2 p-3 bg-blue-500/10 text-blue-600 rounded-xl hover:bg-blue-500 hover:text-white transition-all text-[10px] font-black uppercase tracking-widest"
+                >
+                  <Download size={14} />
+                  <span>Download JSON Backup</span>
+                </button>
+
+                <button 
+                  onClick={handleRestoreClick}
+                  disabled={backupStatus === 'loading'}
+                  className="flex items-center justify-center gap-2 p-3 bg-amber-500/10 text-amber-600 rounded-xl hover:bg-amber-500 hover:text-white transition-all text-[10px] font-black uppercase tracking-widest"
+                >
+                  {backupStatus === 'loading' ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                  <span>{backupStatus === 'loading' ? 'Restoring...' : 'Restore from Backup'}</span>
+                </button>
+
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  onChange={handleFileChange} 
+                  accept=".json" 
+                  className="hidden" 
+                />
+              </div>
+            </div>
+          </section>
+        )}
       </div>
     </div>
   );

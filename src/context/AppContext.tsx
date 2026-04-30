@@ -43,6 +43,7 @@ interface AppContextType {
   markNotificationAsRead: (id: string) => Promise<void>;
   deleteNotification: (id: string) => Promise<void>;
   addInAppNotification: (userId: string, title: string, message: string, type: Notification['type'], link?: string) => Promise<void>;
+  restoreBackup: (data: any) => Promise<void>;
   isSidebarOpen: boolean;
   setSidebarOpen: (o: boolean) => void;
   toggleTheme: () => void;
@@ -400,6 +401,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const restoreBackup = async (data: any) => {
+    if (!user || profile?.role !== 'admin') return;
+    
+    const collections = ['clients', 'tasks', 'invoices', 'ledger', 'notifications'];
+    
+    for (const col of collections) {
+      if (data[col] && Array.isArray(data[col])) {
+        for (const item of data[col]) {
+          const { id, ...rest } = item;
+          // Convert string timestamps back to Firestore Timestamps if necessary
+          const docData = { ...rest };
+          
+          Object.keys(docData).forEach(key => {
+            const val = docData[key];
+            if (val && typeof val === 'object' && val.seconds !== undefined) {
+              docData[key] = new Timestamp(val.seconds, val.nanoseconds);
+            } else if (typeof val === 'string' && (key === 'createdAt' || key === 'updatedAt' || key === 'date' || key === 'dueDate')) {
+              const d = new Date(val);
+              if (!isNaN(d.getTime())) {
+                docData[key] = Timestamp.fromDate(d);
+              }
+            }
+          });
+
+          await setDoc(doc(db, col, id), docData);
+        }
+      }
+    }
+  };
+
   const value = {
     user,
     profile,
@@ -424,6 +455,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     markNotificationAsRead,
     deleteNotification,
     addInAppNotification,
+    restoreBackup,
     isSidebarOpen,
     setSidebarOpen
   };
