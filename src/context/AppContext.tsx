@@ -321,6 +321,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteInvoice = async (id: string) => {
     if (!window.confirm('Are you sure you want to delete this invoice?')) return;
     try {
+      const invoice = invoices.find(i => i.id === id);
+      if (invoice && invoice.taskIds && invoice.taskIds.length > 0) {
+        for (const taskId of invoice.taskIds) {
+          await updateDoc(doc(db, 'tasks', taskId), { isInvoiced: false });
+        }
+      }
       await deleteDoc(doc(db, 'invoices', id));
       const next = invoices.filter(i => i.id !== id);
       setInvoices(next);
@@ -348,6 +354,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!window.confirm(confirmMsg)) return;
 
     try {
+      // If deleting invoices, we must reset the linked tasks
+      if (type === 'invoices') {
+        for (const id of ids) {
+          const invoice = invoices.find(i => i.id === id);
+          if (invoice && invoice.taskIds && invoice.taskIds.length > 0) {
+            for (const taskId of invoice.taskIds) {
+              await updateDoc(doc(db, 'tasks', taskId), { isInvoiced: false });
+            }
+          }
+        }
+      }
+
       const promises = ids.map(id => deleteDoc(doc(db, type, id)));
       await Promise.all(promises);
       

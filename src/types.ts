@@ -51,6 +51,8 @@ export interface Invoice {
   createdAt: any;
   updatedAt: any;
   roundOff?: number;
+  showUpiQr?: boolean;
+  bankAccountSelected?: 'none' | 'kotak';
 }
 
 export interface LedgerEntry {

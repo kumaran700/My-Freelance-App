@@ -27,6 +27,8 @@ const InvoiceForm = () => {
     status: 'draft' as 'draft' | 'sent' | 'paid' | 'overdue' | 'archived' | 'partially_paid',
     dueDate: '',
     reminderDate: '',
+    showUpiQr: false,
+    bankAccountSelected: 'none' as 'none' | 'kotak',
   });
 
   const [oldStatus, setOldStatus] = useState<string>('');
@@ -66,6 +68,8 @@ const InvoiceForm = () => {
           status: invoice.status,
           dueDate: invoice.dueDate ? new Date(invoice.dueDate.toDate ? invoice.dueDate.toDate() : invoice.dueDate).toISOString().split('T')[0] : '',
           reminderDate: invoice.reminderDate ? new Date(invoice.reminderDate.toDate ? invoice.reminderDate.toDate() : invoice.reminderDate).toISOString().slice(0, 16) : '',
+          showUpiQr: invoice.showUpiQr || false,
+          bankAccountSelected: invoice.bankAccountSelected || 'none',
         });
       }
     }
@@ -102,6 +106,10 @@ const InvoiceForm = () => {
 
     try {
       let savedId = id;
+      const oldInvoice = id ? invoices.find(i => i.id === id) : null;
+      const oldTaskIds = oldInvoice?.taskIds || [];
+      const newTaskIds = formData.taskIds || [];
+
       if (id) {
         await updateDoc(doc(db, 'invoices', id), invoiceData);
       } else {
@@ -111,12 +119,14 @@ const InvoiceForm = () => {
           createdAt: Timestamp.now()
         });
         savedId = newDocRef.id;
+      }
 
-        // Mark tasks as invoiced
-        if (formData.taskIds.length > 0) {
-          for (const taskId of formData.taskIds) {
-            await updateDoc(doc(db, 'tasks', taskId), { isInvoiced: true });
-          }
+      // Sync tasks: Mark newly added tasks as invoiced, unmark removed tasks
+      const allTasksToSync = Array.from(new Set([...oldTaskIds, ...newTaskIds]));
+      if (allTasksToSync.length > 0) {
+        for (const taskId of allTasksToSync) {
+          const isCurrentlyInvoiced = newTaskIds.includes(taskId);
+          await updateDoc(doc(db, 'tasks', taskId), { isInvoiced: isCurrentlyInvoiced });
         }
       }
 
@@ -220,7 +230,17 @@ const InvoiceForm = () => {
     }
   };
 
-  const clientTasks = tasks.filter(t => t.clientId === formData.clientId && (!t.isInvoiced || formData.taskIds.includes(t.id)));
+  const clientTasks = tasks.filter(t => {
+    if (t.clientId !== formData.clientId) return false;
+    // If not marked as invoiced, it's available
+    if (!t.isInvoiced) return true;
+    // If it belongs to the current invoice we are editing, it's available
+    if (formData.taskIds.includes(t.id)) return true;
+    
+    // Safety check: If it's marked as invoiced, check if it's actually linked to any other active invoice
+    const isLinkedToOtherInvoice = invoices.some(inv => inv.id !== id && (inv.taskIds || []).includes(t.id));
+    return !isLinkedToOtherInvoice;
+  });
 
   return (
     <div className="max-w-md mx-auto space-y-4">
@@ -418,6 +438,34 @@ const InvoiceForm = () => {
                    </p>
                 </div>
              </div>
+          </div>
+
+          <div className="pt-2 space-y-4 border-t border-[var(--border-color)]">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-tight">Include UPI QR</p>
+                <p className="text-[8px] text-[var(--text-muted)] font-bold uppercase">Generate dynamic payment QR</p>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setFormData({...formData, showUpiQr: !formData.showUpiQr})}
+                className={`w-10 h-5 rounded-full transition-all relative ${formData.showUpiQr ? 'bg-[var(--primary)]' : 'bg-slate-300'}`}
+              >
+                <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${formData.showUpiQr ? 'left-5' : 'left-0.5'}`} />
+              </button>
+            </div>
+
+            <div className="space-y-1">
+              <label className="label-caps">Select Bank Details</label>
+              <select
+                className="input font-bold h-9 py-1 text-xs"
+                value={formData.bankAccountSelected}
+                onChange={(e) => setFormData({ ...formData, bankAccountSelected: e.target.value as any })}
+              >
+                <option value="none">NONE / NO BANK INFO</option>
+                <option value="kotak">KOTAK BANK (6546590111)</option>
+              </select>
+            </div>
           </div>
 
           <div className="pt-2 flex gap-2">

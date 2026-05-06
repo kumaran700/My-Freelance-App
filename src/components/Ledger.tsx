@@ -288,7 +288,7 @@ const Ledger = () => {
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (window.confirm('Delete this ledger entry?')) deleteLedgerEntry(entry.id);
+                          deleteLedgerEntry(entry.id);
                         }} 
                         className="p-1.5 hover:text-rose-500 transition-colors"
                       >

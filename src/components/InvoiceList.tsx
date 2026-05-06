@@ -302,7 +302,7 @@ const InvoiceList = () => {
                           <button 
                             onClick={(e) => { 
                               e.stopPropagation(); 
-                              if (window.confirm('Delete this invoice?')) deleteInvoice(invoice.id);
+                              deleteInvoice(invoice.id);
                             }} 
                             className="p-1.5 text-[var(--text-muted)] hover:text-rose-500 transition-colors"
                           >

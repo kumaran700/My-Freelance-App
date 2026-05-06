@@ -109,8 +109,52 @@ export const downloadInvoicePDF = (invoice: Invoice, client: Client, tasks: Task
         </div>
       </div>
 
+      <!-- PAYMENT DETAILS -->
+      ${invoice.bankAccountSelected === 'kotak' || (invoice.showUpiQr && balanceDue > 0 && invoice.currency === 'INR') ? `
+        <div style="margin-top: 40px; display: flex; gap: 30px; align-items: flex-end;">
+          ${invoice.bankAccountSelected === 'kotak' ? `
+            <div style="flex: 1; background: #f8fafc; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0;">
+              <div style="font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 1px;">Bank Transfer Details</div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 3px; border-bottom: 1px solid #f1f5f9; padding-bottom: 3px;">
+                <span style="font-size: 8px; color: #64748b; font-weight: 600; text-transform: uppercase;">A/C NO</span>
+                <span style="font-size: 10px; font-weight: 700;">6546590111</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 3px; border-bottom: 1px solid #f1f5f9; padding-bottom: 3px;">
+                <span style="font-size: 8px; color: #64748b; font-weight: 600; text-transform: uppercase;">IFSC</span>
+                <span style="font-size: 10px; font-weight: 700;">KKBK0008769</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 3px; border-bottom: 1px solid #f1f5f9; padding-bottom: 3px;">
+                <span style="font-size: 8px; color: #64748b; font-weight: 600; text-transform: uppercase;">BRANCH</span>
+                <span style="font-size: 10px; font-weight: 700;">ERODE MAIN</span>
+              </div>
+              <div style="display: flex; justify-content: space-between;">
+                <span style="font-size: 8px; color: #64748b; font-weight: 600; text-transform: uppercase;">UPI ID</span>
+                <span style="font-size: 10px; font-weight: 700;">9159538955@kotakbank</span>
+              </div>
+            </div>
+          ` : '<div style="flex: 1"></div>'}
+
+          ${invoice.showUpiQr && balanceDue > 0 && invoice.currency === 'INR' ? `
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 8px; background: #f8fafc; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0; width: fit-content;">
+              <div style="background: white; padding: 10px; border-radius: 8px; border: 1px solid #f1f5f9; display: block;">
+                <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(`upi://pay?pa=9159538955@kotakbank&pn=KARTHICK%20KUMARAN%20M&tr=${invoice.invoiceNumber}&tn=Invoice%20${invoice.invoiceNumber}&am=${balanceDue}&cu=INR&mode=02&purpose=00`)}" 
+                     style="width: 120px; height: 120px; display: block;" />
+              </div>
+              <div style="text-align: center; width: 100%;">
+                <div style="font-size: 9px; font-weight: 700; text-transform: uppercase; color: #111827; letter-spacing: 1px;">Scan or Touch to Pay</div>
+                <div style="font-size: 7px; color: #64748b; font-weight: 600; text-transform: uppercase; margin-top: 2px; margin-bottom: 8px;">G-Pay, PhonePe, UPI Apps</div>
+                <a href="${`upi://pay?pa=9159538955@kotakbank&pn=KARTHICK%20KUMARAN%20M&tr=${invoice.invoiceNumber}&tn=Invoice%20${invoice.invoiceNumber}&am=${balanceDue}&cu=INR&mode=02&purpose=00`}" 
+                   style="display: block; background: #2563eb; color: white; padding: 6px 15px; border-radius: 6px; font-size: 9px; font-weight: 800; text-decoration: none; text-transform: uppercase; letter-spacing: 1px;">
+                  Pay Now
+                </a>
+              </div>
+            </div>
+          ` : ''}
+        </div>
+      ` : ''}
+
       <!-- FOOTER -->
-      <div style="margin-top: 80px; text-align: right; font-size: 12px; color: #9ca3af; letter-spacing: 2px;">
+      <div style="margin-top: 60px; text-align: right; font-size: 10px; color: #9ca3af; letter-spacing: 3px; font-weight: 700; text-transform: uppercase;">
         THANK YOU
       </div>
 

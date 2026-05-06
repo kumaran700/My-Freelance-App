@@ -207,7 +207,7 @@ const TaskList = () => {
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (window.confirm('Delete this task?')) deleteTask(task.id);
+                          deleteTask(task.id);
                         }} 
                         className="p-1.5 text-[var(--text-muted)] hover:text-rose-500 transition-colors"
                       >

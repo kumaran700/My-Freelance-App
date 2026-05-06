@@ -150,7 +150,7 @@ const ClientList = () => {
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (window.confirm('Delete this client?')) deleteClient(client.id);
+                          deleteClient(client.id);
                         }} 
                         className="p-1.5 text-[var(--text-muted)] hover:text-rose-500 transition-colors"
                       >

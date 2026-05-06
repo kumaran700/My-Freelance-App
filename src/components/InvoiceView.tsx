@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { QRCodeSVG } from 'qrcode.react';
 import { 
   ArrowLeft, 
   Printer, 
@@ -224,8 +225,54 @@ const InvoiceView = () => {
             </div>
           </div>
 
-          <div className="mt-20 pt-8 border-t border-slate-100 flex justify-between items-end">
-            <div className="text-left space-y-1">
+          <div className="mt-12 grid grid-cols-2 gap-8 items-end">
+            <div className="space-y-4">
+              {invoice.bankAccountSelected === 'kotak' && (
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 leading-none">BANK TRANSFER DETAILS</h4>
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between">
+                      <span className="text-[8px] font-bold text-slate-500 uppercase">A/C NO.</span>
+                      <span className="text-[10px] font-black tabular-nums leading-none">6546590111</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[8px] font-bold text-slate-500 uppercase">IFSC CODE</span>
+                      <span className="text-[10px] font-black leading-none">KKBK0008769</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[8px] font-bold text-slate-500 uppercase">BRANCH</span>
+                      <span className="text-[10px] font-black leading-none uppercase">ERODE MAIN</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[8px] font-bold text-slate-500 uppercase">UPI ID</span>
+                      <span className="text-[10px] font-black leading-none">9159538955@kotakbank</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {invoice.showUpiQr && (invoice.amount - (invoice.advancePaid || 0)) > 0 && invoice.currency === 'INR' && (
+                <div className="flex flex-col gap-3 p-6 bg-slate-50 rounded-2xl border border-slate-100 w-fit group">
+                  <div className="p-3 bg-white rounded-xl shadow-sm border border-slate-100">
+                    <QRCodeSVG 
+                      value={`upi://pay?pa=9159538955@kotakbank&pn=KARTHICK%20KUMARAN%20M&tr=${invoice.invoiceNumber}&tn=Invoice%20${invoice.invoiceNumber}&am=${invoice.amount - (invoice.advancePaid || 0)}&cu=INR&mode=02&purpose=00`} 
+                      size={160} 
+                      marginSize={1} 
+                      level="H"
+                    />
+                  </div>
+                  <div className="space-y-2 text-center">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-900 leading-tight">SCAN OR TOUCH TO PAY</p>
+                    <p className="text-[8px] text-slate-400 font-bold uppercase leading-tight italic mb-3">G-Pay, PhonePe, UPI Apps</p>
+                    <a 
+                      href={`upi://pay?pa=9159538955@kotakbank&pn=KARTHICK%20KUMARAN%20M&tr=${invoice.invoiceNumber}&tn=Invoice%20${invoice.invoiceNumber}&am=${invoice.amount - (invoice.advancePaid || 0)}&cu=INR&mode=02&purpose=00`}
+                      className="mt-2 block w-full py-2 bg-blue-600 text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/20 active:scale-95"
+                    >
+                      Pay Now via UPI
+                    </a>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="text-right">
               <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.3em]">THANK YOU</p>
