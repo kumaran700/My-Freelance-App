@@ -50,9 +50,12 @@ export interface Invoice {
   ownerId: string;
   createdAt: any;
   updatedAt: any;
+  discount?: number;
+  showDiscount?: boolean;
   roundOff?: number;
   showUpiQr?: boolean;
   bankAccountSelected?: 'none' | 'kotak';
+  template?: 'Minimalist' | 'Enterprise' | 'Creative';
 }
 
 export interface LedgerEntry {
@@ -73,6 +76,7 @@ export interface AppSettings {
   usdToInrRate: number;
   theme: 'light' | 'dark';
   lastRateUpdate?: string;
+  defaultInvoiceTemplate?: 'Minimalist' | 'Enterprise' | 'Creative';
 }
 
 export interface Notification {

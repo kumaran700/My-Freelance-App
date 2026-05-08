@@ -11,7 +11,9 @@ import {
   Building2,
   Edit,
   Trash2,
-  FileText
+  FileText,
+  Share2,
+  Link as LinkIcon
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { format } from 'date-fns';
@@ -24,6 +26,7 @@ const InvoiceView = () => {
   const navigate = useNavigate();
   const { invoices, clients, tasks, user, settings, profile } = useAppContext();
   const isAdmin = profile?.role === 'admin';
+  const [copied, setCopied] = React.useState(false);
   const invoiceRef = useRef<HTMLDivElement>(null);
 
   const invoice = invoices.find(i => i.id === id);
@@ -38,6 +41,13 @@ const InvoiceView = () => {
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const copyPublicLink = () => {
+    const url = `${window.location.origin}/public/invoice/${invoice?.id}`;
+    navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   if (!invoice || !client) return <div>Invoice not found</div>;
@@ -93,6 +103,13 @@ const InvoiceView = () => {
               <span>MARK PAID</span>
             </button>
           )}
+          <button 
+            onClick={copyPublicLink} 
+            className={`btn-secondary py-1.5 h-fit px-3 flex items-center gap-2 transition-all ${copied ? 'bg-emerald-500 text-white border-emerald-500' : ''}`}
+          >
+            {copied ? <CheckCircle size={14} /> : <Share2 size={14} />}
+            <span>{copied ? 'COPIED' : 'SHARE LINK'}</span>
+          </button>
           <button onClick={() => navigate(`/invoices/edit/${invoice.id}`)} className="btn-secondary py-1.5 h-fit px-2">
             <Edit size={14} />
           </button>
@@ -207,25 +224,32 @@ const InvoiceView = () => {
             <div className="w-64 space-y-2">
               <div className="flex justify-between items-center text-slate-500 py-1 border-t border-slate-100">
                 <span className="text-[10px] font-black uppercase tracking-widest">SUBTOTAL</span>
-                <span className="text-xs font-black tabular-nums">{formatCurrency(invoice.amount, invoice.currency)}</span>
+                <span className="text-xs font-black tabular-nums">{formatCurrency(invoiceTasks.reduce((sum, t) => sum + t.amount, 0) + (invoice.roundOff || 0), invoice.currency)}</span>
               </div>
+              {invoice.showDiscount && (invoice.discount || 0) > 0 && (
+                <div className="flex justify-between items-center text-rose-500 py-1">
+                  <span className="text-[10px] font-black uppercase tracking-widest">DISCOUNT</span>
+                  <span className="text-xs font-black tabular-nums">- {formatCurrency(invoice.discount || 0, invoice.currency)}</span>
+                </div>
+              )}
               {invoice.advancePaid > 0 && (
                 <div className="flex justify-between items-center text-emerald-600 py-1">
                   <span className="text-[10px] font-black uppercase tracking-widest">ADVANCE PAID</span>
                   <span className="text-xs font-black tabular-nums">- {formatCurrency(invoice.advancePaid, invoice.currency)}</span>
                 </div>
               )}
-              <div className="flex justify-between items-baseline text-slate-900 bg-slate-900 text-white p-3 rounded-lg overflow-hidden relative">
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] relative z-10">BALANCE DUE</span>
-                <span className="text-2xl font-black tabular-nums relative z-10 tracking-tighter">
+              <div className="flex justify-between items-center text-slate-900 bg-slate-100 dark:bg-slate-800 p-4 rounded-xl overflow-hidden relative">
+                <div className="absolute inset-0 bg-slate-900"></div>
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] relative z-10 text-white">BALANCE DUE</span>
+                <span className="text-2xl font-black tabular-nums relative z-10 tracking-tighter text-white">
                   {formatCurrency(invoice.amount - (invoice.advancePaid || 0), invoice.currency)}
                 </span>
-                <div className="absolute top-0 right-0 w-24 h-full bg-blue-600 -skew-x-[20deg] translate-x-12"></div>
+                <div className="absolute top-0 right-0 w-32 h-full bg-blue-600 -skew-x-[20deg] translate-x-16"></div>
               </div>
             </div>
           </div>
 
-          <div className="mt-12 grid grid-cols-2 gap-8 items-end">
+          <div className="mt-6 grid grid-cols-2 gap-8 items-end">
             <div className="space-y-4">
               {invoice.bankAccountSelected === 'kotak' && (
                 <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
@@ -265,8 +289,13 @@ const InvoiceView = () => {
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-900 leading-tight">SCAN OR TOUCH TO PAY</p>
                     <p className="text-[8px] text-slate-400 font-bold uppercase leading-tight italic mb-3">G-Pay, PhonePe, UPI Apps</p>
                     <a 
-                      href={`upi://pay?pa=9159538955@kotakbank&pn=KARTHICK%20KUMARAN%20M&tr=${invoice.invoiceNumber}&tn=Invoice%20${invoice.invoiceNumber}&am=${invoice.amount - (invoice.advancePaid || 0)}&cu=INR&mode=02&purpose=00`}
-                      className="mt-2 block w-full py-2 bg-blue-600 text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/20 active:scale-95"
+                      href={`upi://pay?pa=9159538955@kotakbank&pn=KARTHICK%20KUMARAN%20M&tr=${invoice.invoiceNumber}&tn=Invoice%20${invoice.invoiceNumber}&am=${invoice.amount - (invoice.advancePaid || 0)}&cu=INR`}
+                      className="mt-2 block w-full py-3 bg-blue-600 text-white rounded-lg text-[10px] font-black uppercase tracking-[0.2em] hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/30 active:scale-95 text-center"
+                      onClick={(e) => {
+                        // For Android, sometimes an iframe or a direct location change is more reliable
+                        // but a simple <a> tag should work. We keep the fallback just in case.
+                        window.location.href = (e.currentTarget as HTMLAnchorElement).href;
+                      }}
                     >
                       Pay Now via UPI
                     </a>

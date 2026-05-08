@@ -142,6 +142,19 @@ const Settings = () => {
               <span className="text-[10px] font-black text-indigo-300 uppercase">INR</span>
             </div>
           </div>
+
+          <div className="space-y-1 pt-4 border-t border-indigo-50">
+            <label className="label-caps text-indigo-600">Default Invoice Template</label>
+            <select
+              className="input font-black h-10 py-1 text-xs bg-indigo-50/50"
+              value={settings.defaultInvoiceTemplate || 'Enterprise'}
+              onChange={(e) => setSettings({ ...settings, defaultInvoiceTemplate: e.target.value as any })}
+            >
+              <option value="Enterprise">ENTERPRISE (PROFESSIONAL)</option>
+              <option value="Minimalist">MINIMALIST (CLEAN)</option>
+              <option value="Creative">CREATIVE (BOLD)</option>
+            </select>
+          </div>
         </section>
 
         {profile?.role === 'admin' && (

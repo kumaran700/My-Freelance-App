@@ -30,12 +30,43 @@ const TaskList = () => {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  
+  // Date Filters
+  const [filterType, setFilterType] = useState<'monthly' | 'all-time' | 'custom'>('monthly');
+  const [viewMonth, setViewMonth] = useState(new Date().getMonth());
+  const [viewYear, setViewYear] = useState(new Date().getFullYear());
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+
+  const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+
+  const isWithinFilter = (dateStr: any) => {
+    if (!dateStr) return false;
+    const d = dateStr.toDate ? dateStr.toDate() : new Date(dateStr);
+    
+    if (filterType === 'all-time') return true;
+    
+    if (filterType === 'monthly') {
+      return d.getMonth() === viewMonth && d.getFullYear() === viewYear;
+    }
+    
+    if (filterType === 'custom' && startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      start.setHours(0, 0, 0, 0);
+      end.setHours(23, 59, 59, 999);
+      return d >= start && d <= end;
+    }
+    
+    return true;
+  };
 
   const filteredTasks = tasks.filter(t => {
     const matchesSearch = t.title.toLowerCase().includes(search.toLowerCase()) || 
                           clients.find(c => c.id === t.clientId)?.name.toLowerCase().includes(search.toLowerCase());
     const matchesFilter = filter === 'all' || t.status === filter;
-    return matchesSearch && matchesFilter;
+    const matchesDate = isWithinFilter(t.createdAt);
+    return matchesSearch && matchesFilter && matchesDate;
   });
 
   const toggleSelectAll = () => {
@@ -53,6 +84,22 @@ const TaskList = () => {
   const handleBulkDelete = async () => {
     await bulkDelete('tasks', selectedIds);
     setSelectedIds([]);
+  };
+
+  const handleGroupInvoice = () => {
+    if (selectedIds.length === 0) return;
+    
+    // Check if all selected tasks belong to the same client
+    const selectedTasks = tasks.filter(t => selectedIds.includes(t.id));
+    const firstClient = selectedTasks[0]?.clientId;
+    const sameClient = selectedTasks.every(t => t.clientId === firstClient);
+
+    if (!sameClient) {
+      alert("Please select tasks from the same client to group into an invoice.");
+      return;
+    }
+
+    navigate(`/invoices/new?taskIds=${selectedIds.join(',')}`);
   };
 
   const handleTaskReminder = async (task: any, e: React.MouseEvent) => {
@@ -99,13 +146,22 @@ const TaskList = () => {
         </div>
         <div className="flex items-center gap-3">
           {isAdmin && selectedIds.length > 0 && (
-            <button 
-              onClick={handleBulkDelete}
-              className="btn h-10 px-4 bg-rose-500/10 text-rose-500 border-rose-500/20 hover:bg-rose-500 hover:text-white transition-all flex items-center gap-2 text-[10px] font-black uppercase tracking-widest"
-            >
-              <Trash2 size={14} />
-              <span>DELETE ({selectedIds.length})</span>
-            </button>
+            <>
+              <button 
+                onClick={handleGroupInvoice}
+                className="btn h-10 px-4 bg-[var(--primary)]/10 text-[var(--primary)] border-[var(--primary)]/20 hover:bg-[var(--primary)] hover:text-white transition-all flex items-center gap-2 text-[10px] font-black uppercase tracking-widest"
+              >
+                <FileText size={14} />
+                <span>GROUP INTO INVOICE ({selectedIds.length})</span>
+              </button>
+              <button 
+                onClick={handleBulkDelete}
+                className="btn h-10 px-4 bg-rose-500/10 text-rose-500 border-rose-500/20 hover:bg-rose-500 hover:text-white transition-all flex items-center gap-2 text-[10px] font-black uppercase tracking-widest"
+              >
+                <Trash2 size={14} />
+                <span>DELETE ({selectedIds.length})</span>
+              </button>
+            </>
           )}
           <button onClick={() => navigate('/tasks/new')} className="btn-primary">
             <Plus size={14} />
@@ -114,31 +170,70 @@ const TaskList = () => {
         </div>
       </header>
 
-      <div className="flex flex-col md:flex-row gap-3">
-        <div className="flex items-center gap-3 flex-1">
-          <div 
-            onClick={toggleSelectAll}
-            className="flex items-center gap-2 px-3 h-10 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg cursor-pointer hover:border-[var(--primary)] transition-colors"
-          >
-            <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${selectedIds.length === filteredTasks.length && filteredTasks.length > 0 ? 'bg-[var(--primary)] border-[var(--primary)]' : 'border-[var(--border-color)]'}`}>
-              {selectedIds.length === filteredTasks.length && filteredTasks.length > 0 && <CheckSquare size={10} className="text-white" />}
+      <div className="card p-4 space-y-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 p-1 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-color)]">
+            <button 
+              onClick={() => setFilterType('monthly')}
+              className={`px-4 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${filterType === 'monthly' ? 'bg-[var(--primary)] text-white shadow-md' : 'text-[var(--text-muted)] hover:text-[var(--text-heading)]'}`}
+            >
+              Monthly
+            </button>
+            <button 
+              onClick={() => setFilterType('all-time')}
+              className={`px-4 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${filterType === 'all-time' ? 'bg-[var(--primary)] text-white shadow-md' : 'text-[var(--text-muted)] hover:text-[var(--text-heading)]'}`}
+            >
+              All Time
+            </button>
+            <button 
+              onClick={() => setFilterType('custom')}
+              className={`px-4 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${filterType === 'custom' ? 'bg-[var(--primary)] text-white shadow-md' : 'text-[var(--text-muted)] hover:text-[var(--text-heading)]'}`}
+            >
+              Custom
+            </button>
+          </div>
+
+          {filterType === 'monthly' && (
+            <div className="flex items-center gap-2">
+              <select 
+                className="input h-9 py-1 text-[10px] font-black w-24"
+                value={viewMonth}
+                onChange={(e) => setViewMonth(parseInt(e.target.value))}
+              >
+                {months.map((m, idx) => <option key={m} value={idx}>{m}</option>)}
+              </select>
+              <select 
+                className="input h-9 py-1 text-[10px] font-black w-24"
+                value={viewYear}
+                onChange={(e) => setViewYear(parseInt(e.target.value))}
+              >
+                {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
             </div>
-            <span className="text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)]">Select All</span>
-          </div>
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" size={14} />
-            <input
-              type="text"
-              placeholder="Search tasks or clients..."
-              className="input pl-10"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-        </div>
-        <div className="flex gap-2">
+          )}
+
+          {filterType === 'custom' && (
+            <div className="flex items-center gap-2">
+              <input 
+                type="date" 
+                value={startDate} 
+                onChange={(e) => setStartDate(e.target.value)}
+                className="input h-9 py-1 text-[10px] font-black w-32"
+              />
+              <span className="text-[10px] font-black text-[var(--text-muted)]">TO</span>
+              <input 
+                type="date" 
+                value={endDate} 
+                onChange={(e) => setEndDate(e.target.value)}
+                className="input h-9 py-1 text-[10px] font-black w-32"
+              />
+            </div>
+          )}
+
+          <div className="h-4 w-px bg-[var(--border-color)] mx-2 hidden md:block" />
+          
           <select 
-            className="input h-10 text-xs font-bold uppercase py-1 px-4 w-40"
+            className="input h-9 text-[10px] font-black uppercase py-1 px-4 w-36"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
           >
@@ -148,6 +243,30 @@ const TaskList = () => {
             <option value="completed">COMPLETED</option>
             <option value="invoiced">INVOICED</option>
           </select>
+        </div>
+
+        <div className="flex flex-col md:flex-row gap-3">
+          <div className="flex items-center gap-3 flex-1">
+            <div 
+              onClick={toggleSelectAll}
+              className="flex items-center gap-2 px-3 h-10 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg cursor-pointer hover:border-[var(--primary)] transition-colors"
+            >
+              <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${selectedIds.length === filteredTasks.length && filteredTasks.length > 0 ? 'bg-[var(--primary)] border-[var(--primary)]' : 'border-[var(--border-color)]'}`}>
+                {selectedIds.length === filteredTasks.length && filteredTasks.length > 0 && <CheckSquare size={10} className="text-white" />}
+              </div>
+              <span className="text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)]">Select All</span>
+            </div>
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" size={14} />
+              <input
+                type="text"
+                placeholder="Search tasks or clients..."
+                className="input pl-10 h-10"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -240,19 +359,37 @@ const TaskList = () => {
                 {task.checklist && task.checklist.length > 0 && (
                   <div className="space-y-2 bg-[var(--bg-main)]/50 p-3 rounded-xl max-h-32 overflow-y-auto custom-scrollbar border border-[var(--border-color)]">
                     {task.checklist.map((item, idx) => (
-                      <div 
+                      <motion.div 
                         key={idx} 
-                        className="flex items-start gap-2 text-[10px] uppercase font-black tracking-wide group/item cursor-pointer"
+                        initial={false}
+                        whileTap={{ scale: 0.98 }}
+                        className="flex items-start gap-2 text-[10px] uppercase font-black tracking-wide group/item cursor-pointer py-0.5"
                         onClick={() => toggleChecklist(task.id, idx)}
                       >
-                        {item.completed ? 
-                          <CheckCircle2 size={13} className="text-[var(--income)] mt-px shrink-0 shadow-sm" /> : 
-                          <Circle size={13} className="text-[var(--text-muted)] mt-px shrink-0" />
-                        }
-                        <span className={item.completed ? 'line-through text-[var(--text-muted)]' : 'text-[var(--text-primary)]'}>
+                        <motion.div
+                          initial={false}
+                          animate={{ 
+                            scale: item.completed ? [1, 1.25, 1] : 1,
+                            rotate: item.completed ? [0, 15, -15, 0] : 0
+                          }}
+                          transition={{ duration: 0.4, ease: "easeOut" }}
+                          className="shrink-0"
+                        >
+                          {item.completed ? 
+                            <CheckCircle2 size={13} className="text-[var(--income)] mt-px shadow-sm" /> : 
+                            <Circle size={13} className="text-[var(--text-muted)] mt-px" />
+                          }
+                        </motion.div>
+                        <motion.span 
+                          animate={{ 
+                            opacity: item.completed ? 0.5 : 1,
+                            x: item.completed ? 4 : 0
+                          }}
+                          className={item.completed ? 'line-through text-[var(--text-muted)]' : 'text-[var(--text-primary)]'}
+                        >
                           {item.text}
-                        </span>
-                      </div>
+                        </motion.span>
+                      </motion.div>
                     ))}
                   </div>
                 )}

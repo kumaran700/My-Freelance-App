@@ -21,6 +21,7 @@ import LedgerForm from './components/LedgerForm';
 import NotificationForm from './components/NotificationForm';
 import Settings from './components/Settings';
 import Login from './components/Login';
+import PublicInvoiceView from './components/PublicInvoiceView';
 
 const AppRoutes = () => {
   const { user, profile, loading, settings } = useAppContext();
@@ -38,48 +39,48 @@ const AppRoutes = () => {
     );
   }
 
-  if (!user) {
-    return <Login />;
-  }
-
-  const isAdmin = profile?.role === 'admin';
-
   return (
     <Routes>
-      <Route element={<Layout />}>
-        <Route path="/" element={<Dashboard />} />
-        
-        {/* Managed routes */}
-        <Route path="/clients" element={<ClientList />} />
-        <Route path="/clients/:id" element={<ClientDetails />} />
-        
-        {/* Admin only routes */}
-        {isAdmin && (
-          <>
-            <Route path="/clients/new" element={<ClientForm />} />
-            <Route path="/clients/edit/:id" element={<ClientForm />} />
-            
-            <Route path="/invoices" element={<InvoiceList />} />
-            <Route path="/invoices/new" element={<InvoiceForm />} />
-            <Route path="/invoices/:id" element={<InvoiceView />} />
-            <Route path="/invoices/edit/:id" element={<InvoiceForm />} />
-            
-            <Route path="/ledger" element={<Ledger />} />
-            <Route path="/ledger/new" element={<LedgerForm />} />
-            <Route path="/settings" element={<Settings />} />
-          </>
-        )}
-        
-        {/* Shared/Manager routes */}
-        <Route path="/tasks" element={<TaskList />} />
-        <Route path="/tasks/new" element={<TaskForm />} />
-        <Route path="/tasks/:id" element={<TaskForm />} />
-        <Route path="/tasks/edit/:id" element={<TaskForm />} />
-        
-        <Route path="/notifications/send" element={<NotificationForm />} />
-        
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Route>
+      <Route path="/public/invoice/:id" element={<PublicInvoiceView />} />
+      
+      {!user ? (
+        <Route path="*" element={<Login />} />
+      ) : (
+        <Route element={<Layout />}>
+          <Route path="/" element={<Dashboard />} />
+          
+          {/* Managed routes */}
+          <Route path="/clients" element={<ClientList />} />
+          <Route path="/clients/:id" element={<ClientDetails />} />
+          
+          {/* Admin only routes */}
+          {profile?.role === 'admin' && (
+            <>
+              <Route path="/clients/new" element={<ClientForm />} />
+              <Route path="/clients/edit/:id" element={<ClientForm />} />
+              
+              <Route path="/invoices" element={<InvoiceList />} />
+              <Route path="/invoices/new" element={<InvoiceForm />} />
+              <Route path="/invoices/:id" element={<InvoiceView />} />
+              <Route path="/invoices/edit/:id" element={<InvoiceForm />} />
+              
+              <Route path="/ledger" element={<Ledger />} />
+              <Route path="/ledger/new" element={<LedgerForm />} />
+              <Route path="/settings" element={<Settings />} />
+            </>
+          )}
+          
+          {/* Shared/Manager routes */}
+          <Route path="/tasks" element={<TaskList />} />
+          <Route path="/tasks/new" element={<TaskForm />} />
+          <Route path="/tasks/:id" element={<TaskForm />} />
+          <Route path="/tasks/edit/:id" element={<TaskForm />} />
+          
+          <Route path="/notifications/send" element={<NotificationForm />} />
+          
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
+      )}
     </Routes>
   );
 };

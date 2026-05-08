@@ -13,43 +13,73 @@ import {
   Landmark,
   Edit2,
   Moon,
-  Sun
+  Sun,
+  AlertCircle,
+  Calendar,
+  Filter
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useAppContext } from '../context/AppContext';
-import { format } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay } from 'date-fns';
 import { db, doc, updateDoc } from '../lib/firebase';
 import { Task } from '../types';
 import { generateStatementPDF } from '../lib/pdfGenerator';
 import { formatCurrency, convertToINR } from '../lib/formatters';
+import { 
+  AreaChart, 
+  Area, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  BarChart,
+  Bar
+} from 'recharts';
 
 const Dashboard = () => {
   const { user, clients, tasks, invoices, ledger, settings, profile, toggleTheme } = useAppContext();
   const navigate = useNavigate();
   const [viewMonth, setViewMonth] = React.useState(new Date().getMonth());
   const [viewYear, setViewYear] = React.useState(new Date().getFullYear());
+  const [filterType, setFilterType] = React.useState<'monthly' | 'all-time' | 'custom'>('monthly');
+  const [startDate, setStartDate] = React.useState('');
+  const [endDate, setEndDate] = React.useState('');
 
   const months = [
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'
   ];
 
-  const filteredTasks = tasks.filter(t => {
-    const d = t.createdAt?.toDate ? t.createdAt.toDate() : new Date(t.createdAt);
-    return d.getMonth() === viewMonth && d.getFullYear() === viewYear;
-  });
+  const isWithinFilter = (dateStr: any) => {
+    if (!dateStr) return false;
+    const d = dateStr.toDate ? dateStr.toDate() : new Date(dateStr);
+    
+    if (filterType === 'all-time') return true;
+    
+    if (filterType === 'monthly') {
+      return d.getMonth() === viewMonth && d.getFullYear() === viewYear;
+    }
+    
+    if (filterType === 'custom' && startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      start.setHours(0, 0, 0, 0);
+      end.setHours(23, 59, 59, 999);
+      return d >= start && d <= end;
+    }
+    
+    return true;
+  };
 
-  const filteredInvoices = invoices.filter(i => {
-    const d = i.createdAt?.toDate ? i.createdAt.toDate() : new Date(i.createdAt);
-    return d.getMonth() === viewMonth && d.getFullYear() === viewYear;
-  });
+  const filteredTasks = tasks.filter(t => isWithinFilter(t.createdAt));
+  const filteredInvoices = invoices.filter(i => isWithinFilter(i.createdAt));
+  const filteredLedger = ledger.filter(entry => isWithinFilter(entry.date));
 
-  const filteredLedger = ledger.filter(entry => {
-    const d = entry.date.toDate ? entry.date.toDate() : new Date(entry.date);
-    return d.getMonth() === viewMonth && d.getFullYear() === viewYear;
-  });
-
-  const activeTasks = filteredTasks.filter(t => t.status !== 'completed');
+  const activeTasks = filteredTasks.filter(t => t.status !== 'completed' && t.status !== 'invoiced');
   
   // Revised calculations with currency conversion
   const invoicedPending = filteredInvoices
@@ -85,14 +115,59 @@ const Dashboard = () => {
   const isAdmin = profile?.role === 'admin';
 
   const stats = isAdmin ? [
-    { name: 'Monthly Projects', value: filteredTasks.length, icon: CheckSquare, color: 'text-[var(--primary)]', note: `${activeTasks.length} PENDING`, path: '/tasks', bg: 'bg-blue-500/10' },
+    { 
+      name: filterType === 'monthly' ? 'Monthly Projects' : filterType === 'all-time' ? 'Total Projects' : 'Projects in Range', 
+      value: filteredTasks.length, 
+      icon: CheckSquare, 
+      color: 'text-[var(--primary)]', 
+      note: `${activeTasks.length} PENDING`, 
+      path: '/tasks', 
+      bg: 'bg-blue-500/10' 
+    },
     { name: 'Pending Income', value: formatCurrency(invoicedPending, 'INR'), icon: FileText, color: 'text-[var(--pending)]', note: null, path: '/invoices', bg: 'bg-amber-500/10' },
-    { name: 'Monthly Revenue', value: formatCurrency(monthlyIncome, 'INR'), icon: TrendingUp, color: 'text-[var(--income)]', note: null, path: '/ledger', bg: 'bg-emerald-500/10' },
+    { 
+      name: filterType === 'monthly' ? 'Monthly Revenue' : filterType === 'all-time' ? 'Total Revenue' : 'Revenue in Range', 
+      value: formatCurrency(monthlyIncome, 'INR'), 
+      icon: TrendingUp, 
+      color: 'text-[var(--income)]', 
+      note: null, 
+      path: '/ledger', 
+      bg: 'bg-emerald-500/10' 
+    },
     { name: 'Total Invoiced', value: formatCurrency(totalInvoiced, 'INR'), icon: FileText, color: 'text-[var(--text-secondary)]', note: null, path: '/invoices', bg: 'bg-slate-500/10' },
   ] : [
-    { name: 'Filtered Tasks', value: filteredTasks.length, icon: CheckSquare, color: 'text-[var(--primary)]', note: `${activeTasks.length} TODO`, path: '/tasks', bg: 'bg-blue-500/10' },
+    { name: filterType === 'monthly' ? 'Monthly Tasks' : 'Filtered Tasks', value: filteredTasks.length, icon: CheckSquare, color: 'text-[var(--primary)]', note: `${activeTasks.length} TODO`, path: '/tasks', bg: 'bg-blue-500/10' },
     { name: 'Invoiced', value: filteredTasks.filter(t => t.status === 'invoiced').length, icon: FileText, color: 'text-[var(--primary)]', note: 'Invoiced tasks', path: '/tasks', bg: 'bg-blue-500/10' },
   ];
+
+  // Chart Data Preparation
+  const daysInMonth = eachDayOfInterval({
+    start: startOfMonth(new Date(viewYear, viewMonth)),
+    end: endOfMonth(new Date(viewYear, viewMonth))
+  });
+
+  const chartData = daysInMonth.map(day => {
+    const dayLedger = filteredLedger.filter(entry => {
+      const d = entry.date.toDate ? entry.date.toDate() : new Date(entry.date);
+      return isSameDay(d, day);
+    });
+
+    const income = dayLedger.filter(e => e.type === 'income').reduce((s, e) => s + e.amount, 0);
+    const expense = dayLedger.filter(e => e.type === 'expense').reduce((s, e) => s + e.amount, 0);
+
+    return {
+      name: format(day, 'd'),
+      income,
+      expense
+    };
+  });
+
+  const taskStatusData = [
+    { name: 'Pending', value: filteredTasks.filter(t => t.status === 'pending').length, color: '#f59e0b' },
+    { name: 'Ongoing', value: filteredTasks.filter(t => t.status === 'ongoing').length, color: '#3b82f6' },
+    { name: 'Completed', value: filteredTasks.filter(t => t.status === 'completed').length, color: '#10b981' },
+    { name: 'Invoiced', value: filteredTasks.filter(t => t.status === 'invoiced').length, color: '#8b5cf6' },
+  ].filter(d => d.value > 0);
 
   return (
     <div className="space-y-6">
@@ -125,21 +200,65 @@ const Dashboard = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-3 pt-4 border-t border-[var(--border-color)]">
-           <select 
-             className="input h-10 py-1 text-[10px] font-black w-36"
-             value={viewMonth}
-             onChange={(e) => setViewMonth(parseInt(e.target.value))}
-           >
-             {months.map((m, idx) => <option key={m} value={idx}>{m.toUpperCase()}</option>)}
-           </select>
-           <select 
-             className="input h-10 py-1 text-[10px] font-black w-28"
-             value={viewYear}
-             onChange={(e) => setViewYear(parseInt(e.target.value))}
-           >
-             {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
-           </select>
+        <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-[var(--border-color)]">
+           <div className="flex items-center gap-2 p-1 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-color)]">
+             <button 
+               onClick={() => setFilterType('monthly')}
+               className={`px-4 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${filterType === 'monthly' ? 'bg-[var(--primary)] text-white shadow-lg' : 'text-[var(--text-muted)] hover:text-[var(--text-heading)]'}`}
+             >
+               Monthly
+             </button>
+             <button 
+               onClick={() => setFilterType('all-time')}
+               className={`px-4 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${filterType === 'all-time' ? 'bg-[var(--primary)] text-white shadow-lg' : 'text-[var(--text-muted)] hover:text-[var(--text-heading)]'}`}
+             >
+               All Time
+             </button>
+             <button 
+               onClick={() => setFilterType('custom')}
+               className={`px-4 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${filterType === 'custom' ? 'bg-[var(--primary)] text-white shadow-lg' : 'text-[var(--text-muted)] hover:text-[var(--text-heading)]'}`}
+             >
+               Custom Range
+             </button>
+           </div>
+
+           {filterType === 'monthly' && (
+             <div className="flex items-center gap-2">
+               <select 
+                 className="input h-10 py-1 text-[10px] font-black w-36"
+                 value={viewMonth}
+                 onChange={(e) => setViewMonth(parseInt(e.target.value))}
+               >
+                 {months.map((m, idx) => <option key={m} value={idx}>{m.toUpperCase()}</option>)}
+               </select>
+               <select 
+                 className="input h-10 py-1 text-[10px] font-black w-28"
+                 value={viewYear}
+                 onChange={(e) => setViewYear(parseInt(e.target.value))}
+               >
+                 {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+               </select>
+             </div>
+           )}
+
+           {filterType === 'custom' && (
+             <div className="flex items-center gap-2">
+               <input 
+                 type="date" 
+                 value={startDate} 
+                 onChange={(e) => setStartDate(e.target.value)}
+                 className="input h-10 py-1 text-[10px] font-black w-36"
+               />
+               <span className="text-[10px] font-black text-[var(--text-muted)]">TO</span>
+               <input 
+                 type="date" 
+                 value={endDate} 
+                 onChange={(e) => setEndDate(e.target.value)}
+                 className="input h-10 py-1 text-[10px] font-black w-36"
+               />
+             </div>
+           )}
+
            <p className="text-[10px] font-bold text-[var(--text-muted)] ml-auto uppercase tracking-widest">Analytics Filter</p>
         </div>
       </header>
@@ -173,6 +292,117 @@ const Dashboard = () => {
           </motion.div>
         ))}
       </div>
+
+      {isAdmin && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Revenue Chart */}
+          <div className="lg:col-span-2 card p-6">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h3 className="font-bold text-[var(--text-heading)] tracking-tight">Revenue Analytics</h3>
+                <p className="text-[9px] uppercase font-bold text-[var(--text-muted)] tracking-widest">Daily income vs expenses</p>
+              </div>
+            </div>
+            <div className="h-[250px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData}>
+                  <defs>
+                    <linearGradient id="incomeGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="var(--income)" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="var(--income)" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" vertical={false} />
+                  <XAxis 
+                    dataKey="name" 
+                    stroke="var(--text-muted)" 
+                    fontSize={10} 
+                    tickLine={false} 
+                    axisLine={false}
+                  />
+                  <YAxis 
+                    stroke="var(--text-muted)" 
+                    fontSize={10} 
+                    tickLine={false} 
+                    axisLine={false}
+                    tickFormatter={(value) => `₹${value}`}
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'var(--card-bg)', 
+                      borderColor: 'var(--border-color)',
+                      fontSize: '11px',
+                      borderRadius: '12px'
+                    }}
+                    itemStyle={{ fontWeight: 'bold' }}
+                  />
+                  <Area 
+                    type="monotone" 
+                    dataKey="income" 
+                    stroke="var(--income)" 
+                    fillOpacity={1} 
+                    fill="url(#incomeGradient)" 
+                    strokeWidth={3}
+                  />
+                  <Area 
+                    type="monotone" 
+                    dataKey="expense" 
+                    stroke="var(--expense)" 
+                    fill="#f43f5e" 
+                    fillOpacity={0.1}
+                    strokeWidth={2}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Task Status Pie */}
+          <div className="card p-6">
+            <h3 className="font-bold text-[var(--text-heading)] tracking-tight mb-1">Project Status</h3>
+            <p className="text-[9px] uppercase font-bold text-[var(--text-muted)] tracking-widest mb-6">Current task distribution</p>
+            <div className="h-[250px] w-full relative">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={taskStatusData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={80}
+                    paddingAngle={5}
+                    dataKey="value"
+                  >
+                    {taskStatusData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'var(--card-bg)', 
+                      borderColor: 'var(--border-color)',
+                      fontSize: '11px',
+                      borderRadius: '12px'
+                    }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <span className="text-2xl font-black text-[var(--text-heading)]">{filteredTasks.length}</span>
+                <span className="text-[8px] font-black uppercase text-[var(--text-muted)]">Tasks</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 mt-4">
+              {taskStatusData.map((item) => (
+                <div key={item.name} className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
+                  <span className="text-[9px] font-black uppercase text-[var(--text-secondary)]">{item.name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-12 gap-6 items-start">
         {/* Recent Tasks */}

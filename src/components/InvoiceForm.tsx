@@ -10,6 +10,7 @@ import { convertCurrency, formatCurrency } from '../lib/formatters';
 const InvoiceForm = () => {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
+  const preSelectedTaskIds = searchParams.get('taskIds')?.split(',').filter(Boolean) || [];
   const preSelectedTaskId = searchParams.get('taskId');
   const preSelectedClientId = searchParams.get('clientId');
 
@@ -29,27 +30,35 @@ const InvoiceForm = () => {
     reminderDate: '',
     showUpiQr: false,
     bankAccountSelected: 'none' as 'none' | 'kotak',
+    discount: 0,
+    showDiscount: false,
+    template: (settings.defaultInvoiceTemplate || 'Enterprise') as 'Minimalist' | 'Enterprise' | 'Creative',
+    isPublic: true,
   });
 
   const [oldStatus, setOldStatus] = useState<string>('');
   const [oldAdvance, setOldAdvance] = useState<number>(0);
 
   useEffect(() => {
-    if (preSelectedTaskId) {
-      const task = tasks.find(t => t.id === preSelectedTaskId);
-      if (task) {
+    const ids = preSelectedTaskIds.length > 0 ? preSelectedTaskIds : (preSelectedTaskId ? [preSelectedTaskId] : []);
+    if (ids.length > 0) {
+      const selectedTasks = tasks.filter(t => ids.includes(t.id));
+      if (selectedTasks.length > 0) {
         setFormData(prev => {
-          const taskAmount = convertCurrency(task.amount || 0, task.currency || 'USD', prev.currency, settings.usdToInrRate);
+          const totalTasksAmount = selectedTasks.reduce((sum, t) => 
+            sum + convertCurrency(t.amount || 0, t.currency || 'USD', prev.currency, settings.usdToInrRate), 
+          0);
+          
           return {
             ...prev,
-            clientId: task.clientId,
-            taskIds: [task.id],
-            amount: taskAmount + (task.roundOff || 0)
+            clientId: selectedTasks[0].clientId,
+            taskIds: ids,
+            amount: totalTasksAmount + (selectedTasks.reduce((s, t) => s + (t.roundOff || 0), 0))
           };
         });
       }
     }
-  }, [preSelectedTaskId, tasks, settings.usdToInrRate]);
+  }, [preSelectedTaskId, preSelectedTaskIds.join(','), tasks, settings.usdToInrRate]);
 
   useEffect(() => {
     if (id) {
@@ -70,6 +79,10 @@ const InvoiceForm = () => {
           reminderDate: invoice.reminderDate ? new Date(invoice.reminderDate.toDate ? invoice.reminderDate.toDate() : invoice.reminderDate).toISOString().slice(0, 16) : '',
           showUpiQr: invoice.showUpiQr || false,
           bankAccountSelected: invoice.bankAccountSelected || 'none',
+          discount: invoice.discount || 0,
+          showDiscount: invoice.showDiscount || false,
+          template: invoice.template || 'Enterprise',
+          isPublic: invoice.isPublic ?? true,
         });
       }
     }
@@ -83,6 +96,10 @@ const InvoiceForm = () => {
     let finalStatus = formData.status;
     const balance = formData.amount - formData.advancePaid;
     
+    // Snapshot data for public view
+    const selectedClient = clients.find(c => c.id === formData.clientId);
+    const selectedTasks = tasks.filter(t => formData.taskIds.includes(t.id));
+
     if (formData.advancePaid > 0) {
       if (balance <= 0) {
         finalStatus = 'paid';
@@ -97,6 +114,8 @@ const InvoiceForm = () => {
 
     const invoiceData = {
       ...formData,
+      clientSnapshot: selectedClient ? { name: selectedClient.name, email: selectedClient.email || '', company: selectedClient.company || '' } : null,
+      tasksSnapshot: selectedTasks.map(t => ({ title: t.title, amount: t.amount, currency: t.currency })),
       status: finalStatus,
       ownerId: user.uid,
       dueDate: formData.dueDate ? Timestamp.fromDate(new Date(formData.dueDate)) : null,
@@ -155,12 +174,13 @@ const InvoiceForm = () => {
     }
   };
 
-  const calculateInvoiceTotal = (taskIds: string[], targetCurrency: string, roundOff: number) => {
+  const calculateInvoiceTotal = (taskIds: string[], targetCurrency: string, roundOff: number, discount: number = 0, showDiscount: boolean = false) => {
     const selectedTasks = tasks.filter(t => taskIds.includes(t.id));
     const tasksTotal = selectedTasks.reduce((sum, t) => 
       sum + convertCurrency(t.amount || 0, t.currency || 'USD', targetCurrency, settings.usdToInrRate), 
     0);
-    return tasksTotal + roundOff;
+    const finalAmount = tasksTotal + roundOff - (showDiscount ? discount : 0);
+    return finalAmount;
   };
 
   const toggleTaskSelection = (taskId: string) => {
@@ -170,7 +190,7 @@ const InvoiceForm = () => {
         ? prev.taskIds.filter(id => id !== taskId)
         : [...prev.taskIds, taskId];
       
-      const totalAmount = calculateInvoiceTotal(newTaskIds, prev.currency, prev.roundOff);
+      const totalAmount = calculateInvoiceTotal(newTaskIds, prev.currency, prev.roundOff, prev.discount, prev.showDiscount);
       
       return {
         ...prev,
@@ -194,8 +214,27 @@ const InvoiceForm = () => {
     setFormData(prev => ({
       ...prev,
       roundOff: val,
-      amount: calculateInvoiceTotal(prev.taskIds, prev.currency, val)
+      amount: calculateInvoiceTotal(prev.taskIds, prev.currency, val, prev.discount, prev.showDiscount)
     }));
+  };
+
+  const handleDiscountChange = (val: number) => {
+    setFormData(prev => ({
+      ...prev,
+      discount: val,
+      amount: calculateInvoiceTotal(prev.taskIds, prev.currency, prev.roundOff, val, prev.showDiscount)
+    }));
+  };
+
+  const handleDiscountToggle = () => {
+    setFormData(prev => {
+      const shown = !prev.showDiscount;
+      return {
+        ...prev,
+        showDiscount: shown,
+        amount: calculateInvoiceTotal(prev.taskIds, prev.currency, prev.roundOff, prev.discount, shown)
+      };
+    });
   };
 
   useEffect(() => {
@@ -203,7 +242,7 @@ const InvoiceForm = () => {
     if (formData.taskIds.length > 0) {
       setFormData(prev => ({
         ...prev,
-        amount: calculateInvoiceTotal(prev.taskIds, prev.currency, prev.roundOff)
+        amount: calculateInvoiceTotal(prev.taskIds, prev.currency, prev.roundOff, prev.discount, prev.showDiscount)
       }));
     }
   }, [formData.currency, settings.usdToInrRate]);
@@ -405,6 +444,38 @@ const InvoiceForm = () => {
             </div>
           </div>
 
+          <div className="pt-2 pb-1 border-t border-[var(--border-color)]">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-tight">Apply Discount</p>
+                <p className="text-[8px] text-[var(--text-muted)] font-bold uppercase">Subtract custom amount</p>
+              </div>
+              <button 
+                type="button"
+                onClick={handleDiscountToggle}
+                className={`w-10 h-5 rounded-full transition-all relative ${formData.showDiscount ? 'bg-rose-500' : 'bg-slate-300'}`}
+              >
+                <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${formData.showDiscount ? 'left-5' : 'left-0.5'}`} />
+              </button>
+            </div>
+            
+            {formData.showDiscount && (
+              <div className="flex gap-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                <div className="flex-1 space-y-1">
+                  <label className="label-caps text-rose-500">Discount Amount</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="input h-9 font-black text-rose-500 border-rose-200 bg-rose-50"
+                    placeholder="0.00"
+                    value={formData.discount}
+                    onChange={(e) => handleDiscountChange(parseFloat(e.target.value) || 0)}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-[var(--border-color)]">
              <div className="space-y-1">
                 <label className="label-caps text-[var(--income)]">Advance Paid</label>
@@ -453,6 +524,33 @@ const InvoiceForm = () => {
               >
                 <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${formData.showUpiQr ? 'left-5' : 'left-0.5'}`} />
               </button>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-tight text-[var(--primary)]">Public Link Access</p>
+                <p className="text-[8px] text-[var(--text-muted)] font-bold uppercase">Anyone with link can view invoice</p>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setFormData({...formData, isPublic: !formData.isPublic})}
+                className={`w-10 h-5 rounded-full transition-all relative ${formData.isPublic ? 'bg-[var(--primary)]' : 'bg-slate-300'}`}
+              >
+                <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${formData.isPublic ? 'left-5' : 'left-0.5'}`} />
+              </button>
+            </div>
+
+            <div className="space-y-1">
+              <label className="label-caps">Invoice Template</label>
+              <select
+                className="input font-bold h-9 py-1 text-xs"
+                value={formData.template}
+                onChange={(e) => setFormData({ ...formData, template: e.target.value as any })}
+              >
+                <option value="Enterprise">ENTERPRISE (PROFESSIONAL)</option>
+                <option value="Minimalist">MINIMALIST (CLEAN)</option>
+                <option value="Creative">CREATIVE (BOLD)</option>
+              </select>
             </div>
 
             <div className="space-y-1">

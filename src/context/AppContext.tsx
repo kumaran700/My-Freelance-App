@@ -98,7 +98,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [settings, setSettingsState] = useState<AppSettings>(() => {
     const saved = localStorage.getItem('kworks_settings');
-    return saved ? JSON.parse(saved) : { usdToInrRate: 83, theme: 'light', lastRateUpdate: '' };
+    return saved ? JSON.parse(saved) : { usdToInrRate: 83, theme: 'light', lastRateUpdate: '', defaultInvoiceTemplate: 'Enterprise' };
   });
 
   const setSettings = (s: AppSettings) => {

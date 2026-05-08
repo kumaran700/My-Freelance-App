@@ -21,7 +21,7 @@ import { format, differenceInDays } from 'date-fns';
 import { db, doc, updateDoc, Timestamp, deleteDoc, setDoc, collection } from '../lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { downloadInvoicePDF } from '../lib/pdfGenerator';
-import { formatCurrency } from '../lib/formatters';
+import { formatCurrency, convertToINR } from '../lib/formatters';
 
 const InvoiceList = () => {
   const { user, invoices, clients, tasks, profile, settings, deleteInvoice, bulkDelete, addInAppNotification } = useAppContext();
@@ -31,13 +31,51 @@ const InvoiceList = () => {
   const [filter, setFilter] = useState('all');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
+  // Date Filters
+  const [filterType, setFilterType] = useState<'monthly' | 'all-time' | 'custom'>('monthly');
+  const [viewMonth, setViewMonth] = useState(new Date().getMonth());
+  const [viewYear, setViewYear] = useState(new Date().getFullYear());
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+
+  const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+
+  const isWithinFilter = (dateStr: any) => {
+    if (!dateStr) return false;
+    const d = dateStr.toDate ? dateStr.toDate() : new Date(dateStr);
+    
+    if (filterType === 'all-time') return true;
+    
+    if (filterType === 'monthly') {
+      return d.getMonth() === viewMonth && d.getFullYear() === viewYear;
+    }
+    
+    if (filterType === 'custom' && startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      start.setHours(0, 0, 0, 0);
+      end.setHours(23, 59, 59, 999);
+      return d >= start && d <= end;
+    }
+    
+    return true;
+  };
+
   const filteredInvoices = invoices.filter(i => {
     const clientName = clients.find(c => c.id === i.clientId)?.name || '';
     const matchesSearch = i.invoiceNumber.toLowerCase().includes(search.toLowerCase()) || 
                           clientName.toLowerCase().includes(search.toLowerCase());
     const matchesFilter = filter === 'all' || i.status === filter;
-    return matchesSearch && matchesFilter;
+    const matchesDate = isWithinFilter(i.createdAt);
+    return matchesSearch && matchesFilter && matchesDate;
   });
+
+  const pendingFilteredTotal = filteredInvoices
+    .filter(i => i.status !== 'paid')
+    .reduce((s, i) => {
+      const balance = i.amount - (i.advancePaid || 0);
+      return s + convertToINR(balance, i.currency, settings.usdToInrRate);
+    }, 0);
 
   const toggleSelectAll = () => {
     if (selectedIds.length === filteredInvoices.length) {
@@ -153,31 +191,70 @@ const InvoiceList = () => {
         </div>
       </header>
 
-      <div className="flex flex-col md:flex-row gap-3">
-        <div className="flex items-center gap-3 flex-1">
-          <div 
-            onClick={toggleSelectAll}
-            className="flex items-center gap-2 px-3 h-10 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg cursor-pointer hover:border-[var(--primary)] transition-colors shrink-0"
-          >
-            <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${selectedIds.length === filteredInvoices.length && filteredInvoices.length > 0 ? 'bg-[var(--primary)] border-[var(--primary)]' : 'border-[var(--border-color)]'}`}>
-              {selectedIds.length === filteredInvoices.length && filteredInvoices.length > 0 && <CheckSquare size={10} className="text-white" />}
+      <div className="card p-4 space-y-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 p-1 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-color)]">
+            <button 
+              onClick={() => setFilterType('monthly')}
+              className={`px-4 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${filterType === 'monthly' ? 'bg-[var(--primary)] text-white shadow-md' : 'text-[var(--text-muted)] hover:text-[var(--text-heading)]'}`}
+            >
+              Monthly
+            </button>
+            <button 
+              onClick={() => setFilterType('all-time')}
+              className={`px-4 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${filterType === 'all-time' ? 'bg-[var(--primary)] text-white shadow-md' : 'text-[var(--text-muted)] hover:text-[var(--text-heading)]'}`}
+            >
+              All Time
+            </button>
+            <button 
+              onClick={() => setFilterType('custom')}
+              className={`px-4 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${filterType === 'custom' ? 'bg-[var(--primary)] text-white shadow-md' : 'text-[var(--text-muted)] hover:text-[var(--text-heading)]'}`}
+            >
+              Custom
+            </button>
+          </div>
+
+          {filterType === 'monthly' && (
+            <div className="flex items-center gap-2">
+              <select 
+                className="input h-9 py-1 text-[10px] font-black w-24"
+                value={viewMonth}
+                onChange={(e) => setViewMonth(parseInt(e.target.value))}
+              >
+                {months.map((m, idx) => <option key={m} value={idx}>{m}</option>)}
+              </select>
+              <select 
+                className="input h-9 py-1 text-[10px] font-black w-24"
+                value={viewYear}
+                onChange={(e) => setViewYear(parseInt(e.target.value))}
+              >
+                {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
             </div>
-            <span className="text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)]">Select All</span>
-          </div>
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" size={14} />
-            <input
-              type="text"
-              placeholder="Search by number or client..."
-              className="input pl-10"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-        </div>
-        <div className="flex gap-2">
+          )}
+
+          {filterType === 'custom' && (
+            <div className="flex items-center gap-2">
+              <input 
+                type="date" 
+                value={startDate} 
+                onChange={(e) => setStartDate(e.target.value)}
+                className="input h-9 py-1 text-[10px] font-black w-32"
+              />
+              <span className="text-[10px] font-black text-[var(--text-muted)]">TO</span>
+              <input 
+                type="date" 
+                value={endDate} 
+                onChange={(e) => setEndDate(e.target.value)}
+                className="input h-9 py-1 text-[10px] font-black w-32"
+              />
+            </div>
+          )}
+
+          <div className="h-4 w-px bg-[var(--border-color)] mx-2 hidden md:block" />
+          
           <select 
-            className="input h-10 text-xs font-bold uppercase py-1 px-4 w-40"
+            className="input h-9 text-[10px] font-black uppercase py-1 px-4 w-36"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
           >
@@ -187,6 +264,37 @@ const InvoiceList = () => {
             <option value="paid">PAID</option>
             <option value="overdue">OVERDUE</option>
           </select>
+
+          {isAdmin && (
+            <div className="ml-auto flex items-center gap-2 px-4 py-1.5 bg-[var(--pending)]/10 text-[var(--pending)] rounded-full border border-[var(--pending)]/20 shadow-sm">
+              <p className="text-[9px] font-black uppercase tracking-widest leading-none">Pending for List</p>
+              <p className="text-[11px] font-black tracking-tight">{formatCurrency(pendingFilteredTotal, 'INR')}</p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-col md:flex-row gap-3">
+          <div className="flex items-center gap-3 flex-1">
+            <div 
+              onClick={toggleSelectAll}
+              className="flex items-center gap-2 px-3 h-10 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg cursor-pointer hover:border-[var(--primary)] transition-colors shrink-0"
+            >
+              <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${selectedIds.length === filteredInvoices.length && filteredInvoices.length > 0 ? 'bg-[var(--primary)] border-[var(--primary)]' : 'border-[var(--border-color)]'}`}>
+                {selectedIds.length === filteredInvoices.length && filteredInvoices.length > 0 && <CheckSquare size={10} className="text-white" />}
+              </div>
+              <span className="text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)]">Select All</span>
+            </div>
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" size={14} />
+              <input
+                type="text"
+                placeholder="Search by number or client..."
+                className="input pl-10 h-10"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+          </div>
         </div>
       </div>
 

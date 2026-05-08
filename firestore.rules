@@ -83,7 +83,7 @@ service cloud.firestore {
 
     // --- Invoices ---
     match /invoices/{invoiceId} {
-      allow get: if isAdmin();
+      allow get: if isAdmin() || existing().get('isPublic', false) == true;
       allow list: if isAdmin();
       allow create: if isAdmin() && incoming().ownerId == request.auth.uid;
       allow update, delete: if isAdmin();
