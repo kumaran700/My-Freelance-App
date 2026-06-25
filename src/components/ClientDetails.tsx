@@ -34,7 +34,7 @@ const ClientDetails = () => {
   const clientInvoices = invoices.filter(i => i.clientId === id);
 
   const totalInvoiced = clientInvoices.reduce((sum, i) => sum + convertToINR(i.amount, i.currency, settings.usdToInrRate), 0);
-  const totalPaid = clientInvoices.filter(i => i.status === 'paid').reduce((sum, i) => sum + convertToINR(i.amount, i.currency, settings.usdToInrRate), 0);
+  const totalPaid = clientInvoices.reduce((sum, i) => sum + convertToINR(i.status === 'paid' ? i.amount : (i.advancePaid || 0), i.currency, settings.usdToInrRate), 0);
   const totalBalance = totalInvoiced - totalPaid;
 
   if (!client) return (

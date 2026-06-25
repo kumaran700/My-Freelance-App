@@ -58,10 +58,10 @@ export const generateInvoicePDF = (invoice: any, client: any, tasks: any[]) => {
         </table>
 
         <div style="margin-top: 30px; display: flex; justify-content: flex-end;">
-          <div style="width: 200px; font-size: 10px; space-y: 5px;">
+          <div style="width: 200px; font-size: 10px;">
             <div style="display: flex; justify-content: space-between; padding: 5px 0;">
               <span>Subtotal</span>
-              <span>${formatCurrency(tasks.reduce((sum, t) => sum + t.amount, 0) + (invoice.roundOff || 0), invoice.currency)}</span>
+              <span>${formatCurrency(tasks.reduce((sum, t) => sum + (t.amount || 0), 0) + (invoice.roundOff || 0), invoice.currency)}</span>
             </div>
             ${invoice.showDiscount ? `
               <div style="display: flex; justify-content: space-between; padding: 5px 0;">

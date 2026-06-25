@@ -65,7 +65,8 @@ const InvoiceList = () => {
     const clientName = clients.find(c => c.id === i.clientId)?.name || '';
     const matchesSearch = i.invoiceNumber.toLowerCase().includes(search.toLowerCase()) || 
                           clientName.toLowerCase().includes(search.toLowerCase());
-    const matchesFilter = filter === 'all' || i.status === filter;
+    const matchesFilter = filter === 'all' || 
+                          (filter === 'pending' ? i.status !== 'paid' : i.status === filter);
     const matchesDate = isWithinFilter(i.createdAt);
     return matchesSearch && matchesFilter && matchesDate;
   });
@@ -259,6 +260,8 @@ const InvoiceList = () => {
             onChange={(e) => setFilter(e.target.value)}
           >
             <option value="all">ALL STATUS</option>
+            <option value="pending">PENDING (UNPAID)</option>
+            <option value="partially_paid">PARTIALLY PAID</option>
             <option value="draft">DRAFT</option>
             <option value="sent">SENT</option>
             <option value="paid">PAID</option>

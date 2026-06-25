@@ -102,7 +102,7 @@ const ClientList = () => {
           const clientTasks = tasks.filter(t => t.clientId === client.id);
           const clientInvoices = invoices.filter(i => i.clientId === client.id);
           const pendingBalance = clientInvoices.filter(i => i.status !== 'paid').reduce((sum, inv) => 
-            sum + convertToINR(inv.amount, inv.currency, settings.usdToInrRate), 0
+            sum + convertToINR(inv.amount - (inv.advancePaid || 0), inv.currency, settings.usdToInrRate), 0
           );
 
           return (

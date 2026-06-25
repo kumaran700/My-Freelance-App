@@ -4,7 +4,6 @@ import { db, doc, getDoc } from '../lib/firebase';
 import { Invoice } from '../types';
 import { formatCurrency } from '../lib/formatters';
 import { Loader2, AlertCircle, Download, ExternalLink } from 'lucide-react';
-import { usePDF } from 'react-to-pdf';
 import { generateInvoicePDF } from '../lib/pdfGenerator';
 
 const PublicInvoiceView = () => {

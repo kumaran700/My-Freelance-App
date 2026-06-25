@@ -45,7 +45,7 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const [viewMonth, setViewMonth] = React.useState(new Date().getMonth());
   const [viewYear, setViewYear] = React.useState(new Date().getFullYear());
-  const [filterType, setFilterType] = React.useState<'monthly' | 'all-time' | 'custom'>('monthly');
+  const [filterType, setFilterType] = React.useState<'monthly' | 'all-time' | 'custom'>('all-time');
   const [startDate, setStartDate] = React.useState('');
   const [endDate, setEndDate] = React.useState('');
 
@@ -81,7 +81,7 @@ const Dashboard = () => {
 
   const activeTasks = filteredTasks.filter(t => t.status !== 'completed' && t.status !== 'invoiced');
   
-  // Revised calculations with currency conversion
+  // Revised calculations with currency conversion including draft invoices
   const invoicedPending = filteredInvoices
     .filter(i => i.status !== 'paid')
     .reduce((s, i) => {
@@ -90,8 +90,7 @@ const Dashboard = () => {
     }, 0);
 
   const revenuePaid = filteredInvoices
-    .filter(i => i.status === 'paid')
-    .reduce((s, i) => s + convertToINR(i.amount, i.currency, settings.usdToInrRate), 0);
+    .reduce((s, i) => s + convertToINR(i.status === 'paid' ? i.amount : (i.advancePaid || 0), i.currency, settings.usdToInrRate), 0);
 
   const totalInvoiced = filteredInvoices
     .reduce((s, i) => s + convertToINR(i.amount, i.currency, settings.usdToInrRate), 0);
